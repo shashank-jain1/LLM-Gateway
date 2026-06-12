@@ -2,12 +2,14 @@ version: "3.8"
 
 services:
   llm-gateway:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: llm-gateway
     ports:
       - "8000:8000"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      - ../backend/config.yaml:/app/config.yaml:ro
     environment:
       - LLM_GATEWAY_CONFIG=/app/config.yaml
     restart: unless-stopped
