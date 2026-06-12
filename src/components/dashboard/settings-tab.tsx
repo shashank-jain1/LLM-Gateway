@@ -2,15 +2,47 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check, Wifi, WifiOff } from "lucide-react";
+import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check, Wifi, WifiOff, RotateCcw } from "lucide-react";
 import { useGatewayStore } from "@/lib/gateway-store";
 
 export function SettingsTab() {
-  const { doReloadConfig, config, isGatewayConnected } = useGatewayStore();
+  const { doReloadConfig, doSaveConfig, config, isGatewayConnected } = useGatewayStore();
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [reloadSuccess, setReloadSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Editable gateway config fields
+  const [editPort, setEditPort] = useState("");
+  const [editHost, setEditHost] = useState("");
+  const [editDefaultCooldown, setEditDefaultCooldown] = useState("");
+  const [editMaxCooldown, setEditMaxCooldown] = useState("");
+  const [editRequestTimeout, setEditRequestTimeout] = useState("");
+  const [editLogLevel, setEditLogLevel] = useState("");
+  const [hasEdits, setHasEdits] = useState(false);
+
+  // Initialize edit fields when config loads
+  const gateway = config?.gateway;
+  const initEditsFromConfig = () => {
+    if (gateway) {
+      setEditPort(String(gateway.port));
+      setEditHost(gateway.host);
+      setEditDefaultCooldown(String(gateway.default_cooldown_seconds));
+      setEditMaxCooldown(String(gateway.max_cooldown_seconds));
+      setEditRequestTimeout(String(gateway.request_timeout_seconds));
+      setEditLogLevel(gateway.log_level);
+      setHasEdits(false);
+    }
+  };
+
+  // Run init on first render and when config changes
+  if (gateway && !hasEdits && editPort === "") {
+    initEditsFromConfig();
+  }
+
+  const markEdited = () => setHasEdits(true);
 
   const handleReload = async () => {
     setIsReloading(true);
@@ -19,7 +51,34 @@ export function SettingsTab() {
     if (success) {
       setReloadSuccess(true);
       setTimeout(() => setReloadSuccess(false), 2000);
+      // Re-init edits from freshly loaded config
+      setTimeout(initEditsFromConfig, 500);
     }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    const success = await doSaveConfig({
+      gateway: {
+        api_keys: gateway?.api_keys ?? ["sk-gateway-mysecretkey123"],
+        port: parseInt(editPort, 10) || 8001,
+        host: editHost || "0.0.0.0",
+        default_cooldown_seconds: parseFloat(editDefaultCooldown) || 30.0,
+        max_cooldown_seconds: parseFloat(editMaxCooldown) || 600.0,
+        request_timeout_seconds: parseFloat(editRequestTimeout) || 60.0,
+        log_level: editLogLevel || "info",
+      },
+    });
+    setIsSaving(false);
+    if (success) {
+      setSaveSuccess(true);
+      setHasEdits(false);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    }
+  };
+
+  const handleReset = () => {
+    initEditsFromConfig();
   };
 
   const handleCopy = (text: string) => {
@@ -28,8 +87,7 @@ export function SettingsTab() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const gateway = config?.gateway;
-  const gatewayUrl = `http://${gateway?.host ?? "0.0.0.0"}:${gateway?.port ?? 8000}/v1/chat/completions`;
+  const gatewayUrl = `http://${gateway?.host ?? "0.0.0.0"}:${gateway?.port ?? 8001}/v1/chat/completions`;
   const exampleKey = gateway?.api_keys?.[0] ? `${gateway.api_keys[0].slice(0, 6)}***...${gateway.api_keys[0].slice(-4)}` : "sk-***...xxxx";
   const fullKey = gateway?.api_keys?.[0] ?? "";
 
@@ -92,7 +150,7 @@ export function SettingsTab() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">Reload Configuration</h3>
-              <p className="text-xs text-zinc-500">Hot-reload config.yaml without restart</p>
+              <p className="text-xs text-zinc-500">Hot-reload config.yaml from disk without restart</p>
             </div>
           </div>
           <button
@@ -135,7 +193,7 @@ export function SettingsTab() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">API Key</h3>
-              <p className="text-xs text-zinc-500">Gateway authentication key</p>
+              <p className="text-xs text-zinc-500">Gateway authentication key (live from backend)</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -171,35 +229,42 @@ export function SettingsTab() {
         </motion.div>
       </div>
 
-      {/* Connection Settings */}
+      {/* Editable Gateway Configuration */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2, duration: 0.4 }}
         className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
       >
-        <h3 className="text-sm font-medium text-zinc-300 flex items-center gap-2 mb-4">
-          <Settings className="w-4 h-4 text-zinc-500" />
-          Gateway Configuration
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-zinc-500" />
+            Gateway Configuration
+          </h3>
+          {hasEdits && (
+            <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+              Unsaved changes
+            </span>
+          )}
+        </div>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Port</label>
               <input
-                type="text"
-                value={gateway?.port ?? "—"}
-                readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+                type="number"
+                value={editPort}
+                onChange={(e) => { setEditPort(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20"
               />
             </div>
             <div>
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Host</label>
               <input
                 type="text"
-                value={gateway?.host ?? "—"}
-                readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+                value={editHost}
+                onChange={(e) => { setEditHost(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20"
               />
             </div>
           </div>
@@ -209,10 +274,11 @@ export function SettingsTab() {
                 <Clock className="w-3 h-3" /> Default Cooldown (s)
               </label>
               <input
-                type="text"
-                value={gateway?.default_cooldown_seconds ?? "—"}
-                readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+                type="number"
+                step="1"
+                value={editDefaultCooldown}
+                onChange={(e) => { setEditDefaultCooldown(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20"
               />
             </div>
             <div>
@@ -220,10 +286,11 @@ export function SettingsTab() {
                 <Zap className="w-3 h-3" /> Max Cooldown (s)
               </label>
               <input
-                type="text"
-                value={gateway?.max_cooldown_seconds ?? "—"}
-                readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+                type="number"
+                step="1"
+                value={editMaxCooldown}
+                onChange={(e) => { setEditMaxCooldown(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20"
               />
             </div>
             <div>
@@ -231,22 +298,27 @@ export function SettingsTab() {
                 <Clock className="w-3 h-3" /> Request Timeout (s)
               </label>
               <input
-                type="text"
-                value={gateway?.request_timeout_seconds ?? "—"}
-                readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+                type="number"
+                step="1"
+                value={editRequestTimeout}
+                onChange={(e) => { setEditRequestTimeout(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20"
               />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Log Level</label>
-              <input
-                type="text"
-                value={gateway?.log_level ?? "—"}
-                readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-cyan-400 font-mono focus:outline-none"
-              />
+              <select
+                value={editLogLevel}
+                onChange={(e) => { setEditLogLevel(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-cyan-400 font-mono focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20"
+              >
+                <option value="debug" className="bg-[#1a1a2e]">debug</option>
+                <option value="info" className="bg-[#1a1a2e]">info</option>
+                <option value="warning" className="bg-[#1a1a2e]">warning</option>
+                <option value="error" className="bg-[#1a1a2e]">error</option>
+              </select>
             </div>
             <div>
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Providers Configured</label>
@@ -254,12 +326,54 @@ export function SettingsTab() {
                 type="text"
                 value={config?.providers?.length ?? 0}
                 readOnly
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none opacity-60"
               />
             </div>
           </div>
+
+          {/* Save / Reset buttons */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSave}
+              disabled={!hasEdits || isSaving}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                saveSuccess
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  : hasEdits
+                  ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20"
+                  : "bg-white/5 text-zinc-600 border border-white/[0.04] cursor-not-allowed"
+              } disabled:opacity-50`}
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : saveSuccess ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </>
+              )}
+            </button>
+            {hasEdits && (
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-white/5 text-zinc-400 border border-white/[0.06] hover:bg-white/10 transition-all duration-200"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset
+              </button>
+            )}
+          </div>
+
           <p className="text-[10px] text-zinc-600 italic">
-            Configuration is loaded from the live gateway. Edit config.yaml and click &quot;Reload Config&quot; to apply changes.
+            Changes are saved to the live gateway config and persisted to config.yaml on disk.
           </p>
         </div>
       </motion.div>

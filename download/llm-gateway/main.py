@@ -18,12 +18,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import (
     AppConfig,
+    GatewaySettings,
     ProviderConfig,
     add_provider_to_config,
     delete_provider_from_config,
     get_config,
     load_config,
     reload_config,
+    save_config,
     set_config,
     update_provider_in_config,
 )
@@ -309,6 +311,27 @@ def create_app() -> FastAPI:
             new_cfg = reload_config()
             health_tracker.sync_with_config(new_cfg)
             return JSONResponse(content={"status": "ok", "message": "Config reloaded"})
+        except Exception as exc:
+            return JSONResponse(status_code=500, content={"status": "error", "message": str(exc)})
+
+    @app.put("/admin/config")
+    async def admin_update_config(request: Request, authorization: Optional[str] = Header(None)):
+        """Update gateway settings (port, host, cooldowns, timeouts, log level, api_keys)."""
+        _check_auth(authorization, require_admin=True)
+        body = await request.json()
+        try:
+            cfg = get_config()
+            gw_updates = body.get("gateway", {})
+            if gw_updates:
+                current_gw = cfg.gateway.model_dump()
+                current_gw.update(gw_updates)
+                cfg.gateway = GatewaySettings(**current_gw)
+                set_config(cfg)
+                save_config()
+            return JSONResponse(content={
+                "status": "ok",
+                "message": "Gateway configuration updated",
+            })
         except Exception as exc:
             return JSONResponse(status_code=500, content={"status": "error", "message": str(exc)})
 

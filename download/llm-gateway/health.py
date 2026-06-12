@@ -67,9 +67,15 @@ class ProviderHealthTracker:
             self._states.setdefault(p.id, ProviderState(provider_id=p.id))
 
     def sync_with_config(self, config: AppConfig) -> None:
-        """Add states for new providers, leave existing ones untouched."""
+        """Add states for new providers and remove states for deleted providers."""
+        # Add new providers
+        config_ids = {p.id for p in config.providers}
         for p in config.providers:
             self._states.setdefault(p.id, ProviderState(provider_id=p.id))
+        # Remove providers that no longer exist in config
+        to_remove = [pid for pid in self._states if pid not in config_ids]
+        for pid in to_remove:
+            del self._states[pid]
 
     # -- queries ------------------------------------------------------------
 

@@ -81,3 +81,36 @@ Stage Summary:
 - Charts powered by live request data (empty initially, populates as requests flow)
 - Test Request feature sends real chat completions through the gateway
 - Gateway auto-starts as a child process from the Next.js API routes
+
+---
+Task ID: 1
+Agent: main
+Task: Make the LLM Gateway frontend fully dynamic — all data from real backend, no static/simulated data
+
+Work Log:
+- Read and analyzed all backend Python files (main.py, config.py, health.py, router.py, proxy.py, logger.py, history.py) and all frontend files (10+ components, API routes, store, config)
+- Found that backend already had most needed endpoints (POST/PUT/DELETE /admin/providers, GET /admin/requests, GET /admin/config, etc.)
+- Fixed /api/gateway/requests/route.ts — was returning randomly generated data, now proxies to backend GET /admin/requests
+- Fixed gateway-api.ts getRequestHistory() — was calling wrong endpoint (/api/gateway/providers instead of /api/gateway/requests)
+- Fixed gateway-manager.ts — was pointing to wrong directory (mini-services/gateway-backend instead of download/llm-gateway)
+- Removed USE_SIMULATED_DATA flag from gateway-config.ts
+- Added PUT /admin/config endpoint to Python backend for saving gateway settings
+- Added GatewaySettings and save_config imports to main.py
+- Fixed health.py sync_with_config() to also remove deleted providers from health tracker state
+- Added PUT handler to /api/gateway/config Next.js route for saving config changes
+- Added doSaveConfig action to Zustand store
+- Rewrote Settings tab to be fully editable with Save/Reset buttons, connected to doSaveConfig
+- Built and verified Next.js app compiles cleanly
+- Tested all endpoints end-to-end: status, models, config GET/PUT, providers POST/DELETE, toggle, reload, requests
+
+Stage Summary:
+- All frontend data is now live from the Python gateway backend
+- No simulated/static/random data generators remain
+- Add Provider feature works (dialog with full form → POST /admin/providers)
+- Delete Provider feature works (with confirmation dialog → DELETE /admin/providers/{id})
+- Enable/Disable Provider toggle works
+- Settings tab is now fully editable and saves to backend (PUT /admin/config)
+- API Key display is live from backend config
+- Request logs come from real backend history
+- Monitoring charts compute from real request history data
+- All Next.js API routes properly proxy to Python gateway with no fallback to fake data

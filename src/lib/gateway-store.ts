@@ -6,6 +6,7 @@ import {
   getRequestHistory,
   getModels,
   getGatewayConfig,
+  saveGatewayConfig,
   reloadConfig,
   toggleProvider,
   addProvider,
@@ -47,6 +48,7 @@ interface GatewayStore {
   setActiveTab: (tab: string) => void;
   toggleSidebar: () => void;
   doReloadConfig: () => Promise<boolean>;
+  doSaveConfig: (config: Partial<GatewayConfig>) => Promise<boolean>;
   doToggleProvider: (providerId: string, action: "enable" | "disable") => Promise<boolean>;
   doAddProvider: (provider: { id: string; enabled: boolean; priority: number; base_url: string; api_key: string; models: Record<string, string> }) => Promise<boolean>;
   doDeleteProvider: (providerId: string) => Promise<boolean>;
@@ -140,6 +142,23 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
         return true;
       } else {
         get().addToast(result.message || "Failed to reload config", "error");
+        return false;
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return false;
+    }
+  },
+
+  doSaveConfig: async (config) => {
+    try {
+      const result = await saveGatewayConfig(config);
+      if (result.status === "ok") {
+        get().addToast("Gateway configuration saved", "success");
+        await get().refreshAll();
+        return true;
+      } else {
+        get().addToast(result.message || "Failed to save config", "error");
         return false;
       }
     } catch {

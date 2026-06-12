@@ -1,0 +1,606 @@
+     1→"use client";
+     2→
+     3→import { useGatewayStore } from "@/lib/gateway-store";
+     4→import { motion } from "framer-motion";
+     5→import {
+     6→  Server,
+     7→  CheckCircle2,
+     8→  AlertTriangle,
+     9→  ToggleLeft,
+    10→  ToggleRight,
+    11→  Clock,
+    12→  Globe,
+    13→  Plus,
+    14→  Trash2,
+    15→  X,
+    16→  Hash,
+    17→  Boxes,
+    18→} from "lucide-react";
+    19→import { useState } from "react";
+    20→import {
+    21→  Dialog,
+    22→  DialogContent,
+    23→  DialogHeader,
+    24→  DialogTitle,
+    25→  DialogDescription,
+    26→  DialogFooter,
+    27→} from "@/components/ui/dialog";
+    28→import {
+    29→  AlertDialog,
+    30→  AlertDialogAction,
+    31→  AlertDialogCancel,
+    32→  AlertDialogContent,
+    33→  AlertDialogDescription,
+    34→  AlertDialogFooter,
+    35→  AlertDialogHeader,
+    36→  AlertDialogTitle,
+    37→  AlertDialogTrigger,
+    38→} from "@/components/ui/alert-dialog";
+    39→import { Switch } from "@/components/ui/switch";
+    40→import { Label } from "@/components/ui/label";
+    41→import { Input } from "@/components/ui/input";
+    42→import { Button } from "@/components/ui/button";
+    43→
+    44→interface ModelMapping {
+    45→  virtual: string;
+    46→  actual: string;
+    47→}
+    48→
+    49→export function ProvidersTab() {
+    50→  const { status, doToggleProvider, doAddProvider, doDeleteProvider } = useGatewayStore();
+    51→  const [togglingId, setTogglingId] = useState<string | null>(null);
+    52→  const [addDialogOpen, setAddDialogOpen] = useState(false);
+    53→  const [isAdding, setIsAdding] = useState(false);
+    54→  const [deletingId, setDeletingId] = useState<string | null>(null);
+    55→
+    56→  // Add provider form state
+    57→  const [formId, setFormId] = useState("");
+    58→  const [formBaseUrl, setFormBaseUrl] = useState("");
+    59→  const [formApiKey, setFormApiKey] = useState("");
+    60→  const [formPriority, setFormPriority] = useState("1");
+    61→  const [formEnabled, setFormEnabled] = useState(true);
+    62→  const [formModels, setFormModels] = useState<ModelMapping[]>([{ virtual: "", actual: "" }]);
+    63→
+    64→  const providers = status?.providers ?? [];
+    65→
+    66→  const handleToggle = async (providerId: string, isEnabled: boolean) => {
+    67→    setTogglingId(providerId);
+    68→    const action = isEnabled ? "disable" : "enable";
+    69→    await doToggleProvider(providerId, action);
+    70→    setTogglingId(null);
+    71→  };
+    72→
+    73→  const handleDelete = async (providerId: string) => {
+    74→    setDeletingId(providerId);
+    75→    await doDeleteProvider(providerId);
+    76→    setDeletingId(null);
+    77→  };
+    78→
+    79→  const resetForm = () => {
+    80→    setFormId("");
+    81→    setFormBaseUrl("");
+    82→    setFormApiKey("");
+    83→    setFormPriority("1");
+    84→    setFormEnabled(true);
+    85→    setFormModels([{ virtual: "", actual: "" }]);
+    86→  };
+    87→
+    88→  const handleAddProvider = async () => {
+    89→    if (!formId.trim() || !formBaseUrl.trim() || !formApiKey.trim()) return;
+    90→
+    91→    const modelMappings: Record<string, string> = {};
+    92→    for (const m of formModels) {
+    93→      if (m.virtual.trim() && m.actual.trim()) {
+    94→        modelMappings[m.virtual.trim()] = m.actual.trim();
+    95→      }
+    96→    }
+    97→
+    98→    setIsAdding(true);
+    99→    const success = await doAddProvider({
+   100→      id: formId.trim(),
+   101→      base_url: formBaseUrl.trim(),
+   102→      api_key: formApiKey.trim(),
+   103→      priority: parseInt(formPriority, 10) || 1,
+   104→      enabled: formEnabled,
+   105→      models: modelMappings,
+   106→    });
+   107→    setIsAdding(false);
+   108→
+   109→    if (success) {
+   110→      resetForm();
+   111→      setAddDialogOpen(false);
+   112→    }
+   113→  };
+   114→
+   115→  const addModelRow = () => {
+   116→    setFormModels([...formModels, { virtual: "", actual: "" }]);
+   117→  };
+   118→
+   119→  const removeModelRow = (index: number) => {
+   120→    setFormModels(formModels.filter((_, i) => i !== index));
+   121→  };
+   122→
+   123→  const updateModelRow = (index: number, field: "virtual" | "actual", value: string) => {
+   124→    const updated = [...formModels];
+   125→    updated[index] = { ...updated[index], [field]: value };
+   126→    setFormModels(updated);
+   127→  };
+   128→
+   129→  const isFormValid = formId.trim() && formBaseUrl.trim() && formApiKey.trim();
+   130→
+   131→  return (
+   132→    <div className="space-y-6">
+   133→      {/* Header */}
+   134→      <div className="flex items-center justify-between">
+   135→        <div>
+   136→          <h2 className="text-lg font-semibold text-white">Provider Management</h2>
+   137→          <p className="text-sm text-zinc-500 mt-0.5">Configure and monitor your LLM backend providers</p>
+   138→        </div>
+   139→        <div className="flex items-center gap-3">
+   140→          <span className="text-xs text-zinc-500">
+   141→            {providers.filter((p) => p.enabled && p.status === "healthy").length} of {providers.length} healthy
+   142→          </span>
+   143→          <button
+   144→            onClick={() => setAddDialogOpen(true)}
+   145→            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all duration-200"
+   146→          >
+   147→            <Plus className="w-4 h-4" />
+   148→            Add Provider
+   149→          </button>
+   150→        </div>
+   151→      </div>
+   152→
+   153→      {/* Provider Cards */}
+   154→      <div className="space-y-4">
+   155→        {providers.map((provider, i) => {
+   156→          const isToggling = togglingId === provider.provider_id;
+   157→          const isDeleting = deletingId === provider.provider_id;
+   158→
+   159→          return (
+   160→            <motion.div
+   161→              key={provider.provider_id}
+   162→              initial={{ opacity: 0, x: -20 }}
+   163→              animate={{ opacity: 1, x: 0 }}
+   164→              transition={{ delay: i * 0.08, duration: 0.4, ease: "easeOut" }}
+   165→              className={`rounded-xl bg-[#11111a] border p-6 hover:border-white/[0.12] transition-all duration-300 ${
+   166→                !provider.enabled
+   167→                  ? "border-zinc-700/30 opacity-60"
+   168→                  : provider.status === "healthy"
+   169→                  ? "border-white/[0.06]"
+   170→                  : "border-amber-500/20"
+   171→              }`}
+   172→            >
+   173→              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+   174→                {/* Left: Provider Info */}
+   175→                <div className="flex-1 space-y-4">
+   176→                  <div className="flex items-center gap-3">
+   177→                    <div
+   178→                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+   179→                        !provider.enabled
+   180→                          ? "bg-zinc-500/10 border border-zinc-500/20"
+   181→                          : provider.status === "healthy"
+   182→                          ? "bg-emerald-500/10 border border-emerald-500/20"
+   183→                          : "bg-amber-500/10 border border-amber-500/20"
+   184→                      }`}
+   185→                    >
+   186→                      <Server
+   187→                        className={`w-5 h-5 ${
+   188→                          !provider.enabled
+   189→                            ? "text-zinc-500"
+   190→                            : provider.status === "healthy"
+   191→                            ? "text-emerald-400"
+   192→                            : "text-amber-400"
+   193→                        }`}
+   194→                      />
+   195→                    </div>
+   196→                    <div>
+   197→                      <h3 className="text-base font-semibold text-white">{provider.provider_id}</h3>
+   198→                      <div className="flex items-center gap-2 mt-0.5">
+   199→                        <span
+   200→                          className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+   201→                            !provider.enabled
+   202→                              ? "bg-zinc-500/10 text-zinc-500"
+   203→                              : provider.status === "healthy"
+   204→                              ? "bg-emerald-500/10 text-emerald-400"
+   205→                              : "bg-amber-500/10 text-amber-400"
+   206→                          }`}
+   207→                        >
+   208→                          {!provider.enabled ? (
+   209→                            <X className="w-3 h-3" />
+   210→                          ) : provider.status === "healthy" ? (
+   211→                            <CheckCircle2 className="w-3 h-3" />
+   212→                          ) : (
+   213→                            <AlertTriangle className="w-3 h-3" />
+   214→                          )}
+   215→                          {!provider.enabled ? "disabled" : provider.status}
+   216→                        </span>
+   217→                        <span className="text-[10px] text-zinc-600 flex items-center gap-0.5">
+   218→                          <Hash className="w-2.5 h-2.5" />
+   219→                          Priority {provider.priority}
+   220→                        </span>
+   221→                      </div>
+   222→                    </div>
+   223→                  </div>
+   224→
+   225→                  {/* Base URL */}
+   226→                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+   227→                    <Globe className="w-3.5 h-3.5 shrink-0 text-zinc-600" />
+   228→                    <span className="font-mono truncate">{provider.base_url}</span>
+   229→                  </div>
+   230→
+   231→                  {/* Models Mapping */}
+   232→                  {provider.models && Object.keys(provider.models).length > 0 && (
+   233→                    <div className="space-y-1.5">
+   234→                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
+   235→                        <Boxes className="w-3 h-3" />
+   236→                        Model Mappings
+   237→                      </p>
+   238→                      <div className="flex flex-wrap gap-1.5">
+   239→                        {Object.entries(provider.models).map(([virtual, actual]) => (
+   240→                          <span
+   241→                            key={virtual}
+   242→                            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/10 font-mono"
+   243→                          >
+   244→                            <span className="text-cyan-300">{virtual}</span>
+   245→                            <span className="text-zinc-600">→</span>
+   246→                            <span className="text-zinc-400">{actual}</span>
+   247→                          </span>
+   248→                        ))}
+   249→                      </div>
+   250→                    </div>
+   251→                  )}
+   252→
+   253→                  {/* Stats Grid */}
+   254→                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   255→                    <div className="space-y-1">
+   256→                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Total Requests</p>
+   257→                      <p className="text-lg font-bold text-white">{provider.total_requests.toLocaleString()}</p>
+   258→                    </div>
+   259→                    <div className="space-y-1">
+   260→                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Success Rate</p>
+   261→                      <p className="text-lg font-bold text-emerald-400">
+   262→                        {provider.total_requests > 0
+   263→                          ? ((provider.total_successes / provider.total_requests) * 100).toFixed(1)
+   264→                          : "0"}%
+   265→                      </p>
+   266→                    </div>
+   267→                    <div className="space-y-1">
+   268→                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Failures</p>
+   269→                      <p className="text-lg font-bold text-rose-400">{provider.total_failures}</p>
+   270→                    </div>
+   271→                    <div className="space-y-1">
+   272→                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Consecutive Fails</p>
+   273→                      <p
+   274→                        className={`text-lg font-bold ${
+   275→                          provider.consecutive_failures > 0 ? "text-amber-400" : "text-zinc-400"
+   276→                        }`}
+   277→                      >
+   278→                        {provider.consecutive_failures}
+   279→                      </p>
+   280→                    </div>
+   281→                  </div>
+   282→
+   283→                  {/* Error info */}
+   284→                  {provider.last_error && (
+   285→                    <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-500/5 border border-rose-500/10">
+   286→                      <AlertTriangle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+   287→                      <div>
+   288→                        <p className="text-xs text-rose-400 font-medium">Last Error</p>
+   289→                        <p className="text-[11px] text-rose-400/70 mt-0.5">{provider.last_error}</p>
+   290→                      </div>
+   291→                    </div>
+   292→                  )}
+   293→
+   294→                  {/* Cooldown info */}
+   295→                  {provider.enabled && provider.status === "cooldown" && provider.cooldown_until && (
+   296→                    <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+   297→                      <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+   298→                      <p className="text-xs text-amber-400">
+   299→                        In cooldown — auto-recovers in ~
+   300→                        {Math.max(0, Math.round(provider.cooldown_until - Date.now() / 1000))}s
+   301→                      </p>
+   302→                    </div>
+   303→                  )}
+   304→                </div>
+   305→
+   306→                {/* Right: Actions */}
+   307→                <div className="flex flex-row lg:flex-col items-center gap-2 shrink-0">
+   308→                  <button
+   309→                    onClick={() => handleToggle(provider.provider_id, provider.enabled)}
+   310→                    disabled={isToggling}
+   311→                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+   312→                      provider.enabled
+   313→                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+   314→                        : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+   315→                    } disabled:opacity-50`}
+   316→                  >
+   317→                    {isToggling ? (
+   318→                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+   319→                    ) : provider.enabled ? (
+   320→                      <ToggleRight className="w-4 h-4" />
+   321→                    ) : (
+   322→                      <ToggleLeft className="w-4 h-4" />
+   323→                    )}
+   324→                    {provider.enabled ? "Disable" : "Enable"}
+   325→                  </button>
+   326→
+   327→                  <AlertDialog>
+   328→                    <AlertDialogTrigger asChild>
+   329→                      <button
+   330→                        disabled={isDeleting}
+   331→                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-all duration-200 disabled:opacity-50"
+   332→                      >
+   333→                        {isDeleting ? (
+   334→                          <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+   335→                        ) : (
+   336→                          <Trash2 className="w-3.5 h-3.5" />
+   337→                        )}
+   338→                        Delete
+   339→                      </button>
+   340→                    </AlertDialogTrigger>
+   341→                    <AlertDialogContent className="bg-[#1a1a2e] border-white/10">
+   342→                      <AlertDialogHeader>
+   343→                        <AlertDialogTitle className="text-white">Delete Provider</AlertDialogTitle>
+   344→                        <AlertDialogDescription className="text-zinc-400">
+   345→                          Are you sure you want to delete <span className="text-white font-medium">{provider.provider_id}</span>?
+   346→                          This action cannot be undone and will immediately remove the provider from the gateway.
+   347→                        </AlertDialogDescription>
+   348→                      </AlertDialogHeader>
+   349→                      <AlertDialogFooter>
+   350→                        <AlertDialogCancel className="bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10">
+   351→                          Cancel
+   352→                        </AlertDialogCancel>
+   353→                        <AlertDialogAction
+   354→                          onClick={() => handleDelete(provider.provider_id)}
+   355→                          className="bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:bg-rose-500/30"
+   356→                        >
+   357→                          Delete
+   358→                        </AlertDialogAction>
+   359→                      </AlertDialogFooter>
+   360→                    </AlertDialogContent>
+   361→                  </AlertDialog>
+   362→                </div>
+   363→              </div>
+   364→            </motion.div>
+   365→          );
+   366→        })}
+   367→      </div>
+   368→
+   369→      {/* No Providers */}
+   370→      {providers.length === 0 && (
+   371→        <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
+   372→          <Server className="w-12 h-12 mb-3" />
+   373→          <p className="text-sm font-medium">No providers configured</p>
+   374→          <p className="text-xs mt-1">Add a provider to get started</p>
+   375→          <button
+   376→            onClick={() => setAddDialogOpen(true)}
+   377→            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all duration-200"
+   378→          >
+   379→            <Plus className="w-4 h-4" />
+   380→            Add Provider
+   381→          </button>
+   382→        </div>
+   383→      )}
+   384→
+   385→      {/* Provider Config Summary */}
+   386→      {providers.length > 0 && (
+   387→        <div className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5">
+   388→          <h3 className="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
+   389→            <Globe className="w-4 h-4" />
+   390→            Connection Details
+   391→          </h3>
+   392→          <div className="overflow-x-auto">
+   393→            <table className="w-full text-sm">
+   394→              <thead>
+   395→                <tr className="border-b border-white/[0.06]">
+   396→                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+   397→                    Provider
+   398→                  </th>
+   399→                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+   400→                    Base URL
+   401→                  </th>
+   402→                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+   403→                    Priority
+   404→                  </th>
+   405→                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+   406→                    Enabled
+   407→                  </th>
+   408→                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+   409→                    Status
+   410→                  </th>
+   411→                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+   412→                    Models
+   413→                  </th>
+   414→                </tr>
+   415→              </thead>
+   416→              <tbody>
+   417→                {providers.map((provider) => (
+   418→                  <tr key={provider.provider_id} className="border-b border-white/[0.03]">
+   419→                    <td className="px-3 py-2.5 text-xs text-white font-medium">{provider.provider_id}</td>
+   420→                    <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">{provider.base_url}</td>
+   421→                    <td className="px-3 py-2.5">
+   422→                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+   423→                        provider.priority === 1
+   424→                          ? "bg-emerald-500/10 text-emerald-400"
+   425→                          : provider.priority === 2
+   426→                          ? "bg-cyan-500/10 text-cyan-400"
+   427→                          : "bg-amber-500/10 text-amber-400"
+   428→                      }`}>
+   429→                        {provider.priority}
+   430→                      </span>
+   431→                    </td>
+   432→                    <td className="px-3 py-2.5">
+   433→                      <span className={`text-xs ${provider.enabled ? "text-emerald-400" : "text-zinc-600"}`}>
+   434→                        {provider.enabled ? "Yes" : "No"}
+   435→                      </span>
+   436→                    </td>
+   437→                    <td className="px-3 py-2.5">
+   438→                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+   439→                        !provider.enabled
+   440→                          ? "bg-zinc-500/10 text-zinc-500"
+   441→                          : provider.status === "healthy"
+   442→                          ? "bg-emerald-500/10 text-emerald-400"
+   443→                          : "bg-amber-500/10 text-amber-400"
+   444→                      }`}>
+   445→                        {!provider.enabled ? "disabled" : provider.status}
+   446→                      </span>
+   447→                    </td>
+   448→                    <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">
+   449→                      {provider.models ? Object.keys(provider.models).join(", ") : "—"}
+   450→                    </td>
+   451→                  </tr>
+   452→                ))}
+   453→              </tbody>
+   454→            </table>
+   455→          </div>
+   456→        </div>
+   457→      )}
+   458→
+   459→      {/* Add Provider Dialog */}
+   460→      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+   461→        <DialogContent className="bg-[#1a1a2e] border-white/10 text-white sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   462→          <DialogHeader>
+   463→            <DialogTitle className="text-white">Add Provider</DialogTitle>
+   464→            <DialogDescription className="text-zinc-400">
+   465→              Configure a new LLM provider for the gateway
+   466→            </DialogDescription>
+   467→          </DialogHeader>
+   468→
+   469→          <div className="space-y-4 py-2">
+   470→            {/* ID */}
+   471→            <div className="space-y-2">
+   472→              <Label className="text-zinc-300 text-xs">Provider ID</Label>
+   473→              <Input
+   474→                value={formId}
+   475→                onChange={(e) => setFormId(e.target.value)}
+   476→                placeholder="e.g. openai-primary"
+   477→                className="bg-black/30 border-white/10 text-white placeholder-zinc-600 text-sm"
+   478→              />
+   479→            </div>
+   480→
+   481→            {/* Base URL */}
+   482→            <div className="space-y-2">
+   483→              <Label className="text-zinc-300 text-xs">Base URL</Label>
+   484→              <Input
+   485→                value={formBaseUrl}
+   486→                onChange={(e) => setFormBaseUrl(e.target.value)}
+   487→                placeholder="e.g. https://api.openai.com/v1"
+   488→                className="bg-black/30 border-white/10 text-white placeholder-zinc-600 text-sm font-mono"
+   489→              />
+   490→            </div>
+   491→
+   492→            {/* API Key */}
+   493→            <div className="space-y-2">
+   494→              <Label className="text-zinc-300 text-xs">API Key</Label>
+   495→              <Input
+   496→                type="password"
+   497→                value={formApiKey}
+   498→                onChange={(e) => setFormApiKey(e.target.value)}
+   499→                placeholder="sk-..."
+   500→                className="bg-black/30 border-white/10 text-white placeholder-zinc-600 text-sm font-mono"
+   501→              />
+   502→            </div>
+   503→
+   504→            {/* Priority + Enabled */}
+   505→            <div className="grid grid-cols-2 gap-4">
+   506→              <div className="space-y-2">
+   507→                <Label className="text-zinc-300 text-xs">Priority</Label>
+   508→                <Input
+   509→                  type="number"
+   510→                  min="1"
+   511→                  value={formPriority}
+   512→                  onChange={(e) => setFormPriority(e.target.value)}
+   513→                  className="bg-black/30 border-white/10 text-white text-sm"
+   514→                />
+   515→              </div>
+   516→              <div className="space-y-2">
+   517→                <Label className="text-zinc-300 text-xs">Enabled</Label>
+   518→                <div className="flex items-center gap-3 h-9">
+   519→                  <Switch
+   520→                    checked={formEnabled}
+   521→                    onCheckedChange={setFormEnabled}
+   522→                  />
+   523→                  <span className={`text-sm ${formEnabled ? "text-emerald-400" : "text-zinc-500"}`}>
+   524→                    {formEnabled ? "Yes" : "No"}
+   525→                  </span>
+   526→                </div>
+   527→              </div>
+   528→            </div>
+   529→
+   530→            {/* Model Mappings */}
+   531→            <div className="space-y-2">
+   532→              <div className="flex items-center justify-between">
+   533→                <Label className="text-zinc-300 text-xs">Model Mappings</Label>
+   534→                <button
+   535→                  onClick={addModelRow}
+   536→                  className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+   537→                >
+   538→                  <Plus className="w-3 h-3" />
+   539→                  Add mapping
+   540→                </button>
+   541→              </div>
+   542→              <div className="space-y-2">
+   543→                {formModels.map((mapping, index) => (
+   544→                  <div key={index} className="flex items-center gap-2">
+   545→                    <Input
+   546→                      value={mapping.virtual}
+   547→                      onChange={(e) => updateModelRow(index, "virtual", e.target.value)}
+   548→                      placeholder="Virtual model"
+   549→                      className="flex-1 bg-black/30 border-white/10 text-white placeholder-zinc-600 text-xs font-mono"
+   550→                    />
+   551→                    <span className="text-zinc-600 text-xs">→</span>
+   552→                    <Input
+   553→                      value={mapping.actual}
+   554→                      onChange={(e) => updateModelRow(index, "actual", e.target.value)}
+   555→                      placeholder="Actual model"
+   556→                      className="flex-1 bg-black/30 border-white/10 text-white placeholder-zinc-600 text-xs font-mono"
+   557→                    />
+   558→                    {formModels.length > 1 && (
+   559→                      <button
+   560→                        onClick={() => removeModelRow(index)}
+   561→                        className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-rose-400 transition-colors"
+   562→                      >
+   563→                        <X className="w-3.5 h-3.5" />
+   564→                      </button>
+   565→                    )}
+   566→                  </div>
+   567→                ))}
+   568→              </div>
+   569→              <p className="text-[10px] text-zinc-600">
+   570→                Map virtual model names (used by clients) to actual provider model names
+   571→              </p>
+   572→            </div>
+   573→          </div>
+   574→
+   575→          <DialogFooter>
+   576→            <Button
+   577→              variant="outline"
+   578→              onClick={() => setAddDialogOpen(false)}
+   579→              className="bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+   580→            >
+   581→              Cancel
+   582→            </Button>
+   583→            <Button
+   584→              onClick={handleAddProvider}
+   585→              disabled={!isFormValid || isAdding}
+   586→              className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50"
+   587→            >
+   588→              {isAdding ? (
+   589→                <>
+   590→                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+   591→                  Adding...
+   592→                </>
+   593→              ) : (
+   594→                <>
+   595→                  <Plus className="w-3.5 h-3.5" />
+   596→                  Add Provider
+   597→                </>
+   598→              )}
+   599→            </Button>
+   600→          </DialogFooter>
+   601→        </DialogContent>
+   602→      </Dialog>
+   603→    </div>
+   604→  );
+   605→}
+   606→

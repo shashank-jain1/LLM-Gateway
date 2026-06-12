@@ -101,7 +101,7 @@ export async function getModels(): Promise<ModelsResponse> {
 }
 
 export async function getRequestHistory(limit = 100): Promise<RequestHistoryEntry[]> {
-  const res = await fetch(`/api/gateway/providers?limit=${limit}`);
+  const res = await fetch(`/api/gateway/requests?limit=${limit}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || err.error || "Failed to fetch request history");
@@ -167,6 +167,15 @@ export async function updateProvider(
       body: JSON.stringify(updates),
     }
   );
+  return res.json();
+}
+
+export async function saveGatewayConfig(config: Partial<GatewayConfig>): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/gateway/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
   return res.json();
 }
 
