@@ -1,0 +1,49 @@
+# ============================================================
+# LLM API Gateway – Example Configuration
+# ============================================================
+# Copy this file to config.yaml and fill in your real API keys.
+# The gateway reads this on startup and can hot-reload via
+# POST /admin/reload-config.
+
+gateway:
+  api_keys:
+    - "sk-gateway-mysecretkey123"       # Keys clients use to call this gateway
+  # admin_api_keys:                      # Optional: separate keys for /admin/* endpoints
+  #   - "sk-admin-supersecret"
+  port: 8000
+  host: "0.0.0.0"
+  default_cooldown_seconds: 30          # Initial cooldown after a provider errors
+  max_cooldown_seconds: 600             # Cap for exponential backoff
+  request_timeout_seconds: 60
+  log_level: "info"                     # debug | info | warning | error
+  # log_file: "/var/log/llm-gateway.jsonl"  # Optional: also write logs to a file
+
+providers:
+  - id: "openai-primary"
+    enabled: true
+    priority: 1                         # Lower number = tried first
+    base_url: "https://api.openai.com/v1"
+    api_key: "sk-REPLACE-WITH-YOUR-OPENAI-KEY"
+    models:
+      "gpt-4o": "gpt-4o"               # virtual_model_name: provider_model_name
+      "gpt-4o-mini": "gpt-4o-mini"
+      "text-embedding-3-small": "text-embedding-3-small"
+
+  - id: "groq-backup"
+    enabled: true
+    priority: 2
+    base_url: "https://api.groq.com/openai/v1"
+    api_key: "gsk-REPLACE-WITH-YOUR-GROQ-KEY"
+    models:
+      "gpt-4o": "llama-3.3-70b-versatile"      # Maps virtual "gpt-4o" → Groq's Llama
+      "gpt-4o-mini": "llama-3.1-8b-instant"
+
+  - id: "together-backup"
+    enabled: true
+    priority: 3
+    base_url: "https://api.together.xyz/v1"
+    api_key: "together-REPLACE-WITH-YOUR-TOGETHER-KEY"
+    models:
+      "gpt-4o": "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+      "gpt-4o-mini": "meta-llama/Llama-3.1-8B-Instruct-Turbo"
+      "text-embedding-3-small": "togethercomputer/m2-bert-80M-8k-retrieval"
