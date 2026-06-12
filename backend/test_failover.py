@@ -23,6 +23,13 @@ import httpx
 import json
 import yaml
 from pathlib import Path
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+
+# Add project root to sys.path to allow importing backend.* modules
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # ---------------------------------------------------------------------------
 # Mock upstream provider
@@ -30,8 +37,6 @@ from pathlib import Path
 
 def _create_mock_provider(port: int, model_name: str, fail_with_429: bool = False):
     """Create a minimal FastAPI app that mimics an OpenAI-compatible provider."""
-    from fastapi import FastAPI, Request
-    from fastapi.responses import JSONResponse, StreamingResponse
     import uvicorn
 
     app = FastAPI()
@@ -75,6 +80,10 @@ def _create_mock_provider(port: int, model_name: str, fail_with_429: bool = Fals
             "object": "list",
             "data": [{"id": model_name, "object": "model", "created": 0, "owned_by": "mock"}],
         })
+
+    @app.get("/health")
+    async def health():
+        return JSONResponse(content={"status": "ok"})
 
     return app
 
@@ -176,6 +185,8 @@ async def run_tests():
     config_path = _write_test_config()
 
     # Start the gateway
+    import os
+    os.environ["LLM_GATEWAY_CONFIG"] = str(config_path)
     from main import app as gateway_app
     gateway_server, gateway_thread = _run_server(gateway_app, GATEWAY_PORT)
 
@@ -204,6 +215,9 @@ async def run_tests():
     # Stop the primary and restart it in fail mode
     # (In a real test we'd modify the mock, but for simplicity we'll restart)
     # Instead, let's just restart the mock on the same port with 429 mode
+    primary_server.should_exit = True
+    await asyncio.sleep(1.0)
+    
     primary_failing_app = _create_mock_provider(MOCK_PRIMARY_PORT, "gpt-4o", fail_with_429=True)
     _run_server(primary_failing_app, MOCK_PRIMARY_PORT)
 

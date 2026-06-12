@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from config import AppConfig, ProviderConfig, get_config
+from backend.config import AppConfig, ProviderConfig, get_config
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,13 @@ class ProviderHealthTracker:
             self._states.setdefault(p.id, ProviderState(provider_id=p.id))
 
     def sync_with_config(self, config: AppConfig) -> None:
-        """Add states for new providers, leave existing ones untouched."""
+        """Add states for new providers, remove deleted ones, leave existing ones untouched."""
+        current_ids = {p.id for p in config.providers}
+        # Remove deleted providers from health tracker
+        for pid in list(self._states.keys()):
+            if pid not in current_ids:
+                self._states.pop(pid, None)
+        # Add new providers
         for p in config.providers:
             self._states.setdefault(p.id, ProviderState(provider_id=p.id))
 

@@ -6,6 +6,8 @@
  */
 
 import { execSync, spawn, ChildProcess } from "child_process";
+import { existsSync } from "fs";
+import { join } from "path";
 import { GATEWAY_ADMIN_KEY } from "./gateway-config";
 
 let gatewayProcess: ChildProcess | null = null;
@@ -52,11 +54,28 @@ export async function startGateway(): Promise<boolean> {
   console.log("[gateway-manager] Starting Python LLM Gateway...");
 
   try {
-    gatewayProcess = spawn("python3", ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", `--port=${GATEWAY_PORT}`, "--log-level", "error"], {
+    const venvPython = join(GATEWAY_DIR, "venv", "bin", "python");
+    const pythonExecutable = existsSync(venvPython) ? venvPython : "python3";
+
+    const projectRoot = join(GATEWAY_DIR, "..");
+
+    gatewayProcess = spawn(pythonExecutable, ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", `--port=${GATEWAY_PORT}`, "--log-level", "error"], {
       cwd: GATEWAY_DIR,
-      env: { ...process.env, LLM_GATEWAY_CONFIG: "config.yaml" },
+      env: { 
+        ...process.env, 
+        LLM_GATEWAY_CONFIG: "config.yaml",
+        PYTHONPATH: projectRoot
+      },
       stdio: "pipe",
       detached: false,
+    });
+
+    gatewayProcess.stdout?.on("data", (data) => {
+      console.log(`[gateway-process-out] ${data.toString().trim()}`);
+    });
+
+    gatewayProcess.stderr?.on("data", (data) => {
+      console.error(`[gateway-process-err] ${data.toString().trim()}`);
     });
 
     gatewayProcess.on("error", (err) => {

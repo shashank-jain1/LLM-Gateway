@@ -6,9 +6,18 @@ import { ScrollText, Search, CheckCircle2, AlertTriangle, XCircle, RefreshCw } f
 import { useState, useMemo } from "react";
 
 export function LogsTab() {
-  const { requestHistory } = useGatewayStore();
+  const { requestHistory, config } = useGatewayStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failover" | "failed">("all");
+  const [apiKeyFilter, setApiKeyFilter] = useState("all");
+
+  const apiKeys = useMemo(() => {
+    const keys = new Set<string>();
+    requestHistory.forEach((req) => {
+      if (req.api_key) keys.add(req.api_key);
+    });
+    return Array.from(keys);
+  }, [requestHistory]);
 
   const filtered = useMemo(() => {
     return requestHistory.filter((req) => {
@@ -18,9 +27,10 @@ export function LogsTab() {
         req.virtual_model.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (req.provider_id ?? "").toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === "all" || req.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesApiKey = apiKeyFilter === "all" || req.api_key === apiKeyFilter;
+      return matchesSearch && matchesStatus && matchesApiKey;
     });
-  }, [requestHistory, searchQuery, statusFilter]);
+  }, [requestHistory, searchQuery, statusFilter, apiKeyFilter]);
 
   const statusIcon = (status: string) => {
     switch (status) {
@@ -87,6 +97,30 @@ export function LogsTab() {
             className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#11111a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/20 transition-all"
           />
         </div>
+
+        {/* API Key selector filter */}
+        {apiKeys.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#11111a] border border-white/[0.06]">
+            <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">API Key:</span>
+            <select
+              value={apiKeyFilter}
+              onChange={(e) => setApiKeyFilter(e.target.value)}
+              className="bg-transparent text-xs text-white focus:outline-none cursor-pointer"
+            >
+              <option value="all" className="bg-[#11111a]">All Keys</option>
+              {apiKeys.map((key) => {
+                const label = config?.gateway?.api_key_labels?.[key] || "Client Key";
+                const displayKey = `${key.slice(0, 11)}***...${key.slice(-4)}`;
+                return (
+                  <option key={key} value={key} className="bg-[#11111a]">
+                    {label} ({displayKey})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+
         <div className="flex items-center gap-1.5 p-1 rounded-lg bg-[#11111a] border border-white/[0.06]">
           {(["all", "success", "failover", "failed"] as const).map((filter) => (
             <button
@@ -117,6 +151,7 @@ export function LogsTab() {
               <tr className="border-b border-white/[0.06]">
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Status</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Request ID</th>
+                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">API Key</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Time</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Virtual Model</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Provider</th>
@@ -137,6 +172,13 @@ export function LogsTab() {
                   >
                     <td className="px-4 py-3">{statusBadge(req.status)}</td>
                     <td className="px-4 py-3 text-xs text-zinc-400 font-mono">{req.id}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500 font-mono" title={req.api_key || "None"}>
+                      {req.api_key ? (
+                        <span className="text-zinc-400">
+                          {config?.gateway?.api_key_labels?.[req.api_key] || `${req.api_key.slice(0, 11)}...${req.api_key.slice(-4)}`}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">
                       <div className="font-mono">{formatTimestamp(req.timestamp)}</div>
                       <div className="text-[10px] text-zinc-700">{formatDate(req.timestamp)}</div>

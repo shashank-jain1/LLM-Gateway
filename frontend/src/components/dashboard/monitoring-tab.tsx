@@ -25,7 +25,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  buildLatencyDataFromHistory,
+  buildVolumeDataFromHistory,
+  buildErrorDataFromHistory,
+} from "@/lib/gateway-api";
 
 const CUSTOM_TOOLTIP_STYLE = {
   backgroundColor: "#1a1a2e",
@@ -59,13 +64,34 @@ function EmptyChartState({ title }: { title: string }) {
 }
 
 export function MonitoringTab() {
-  const { latencyData, volumeData, errorData, doTestRequest, status } = useGatewayStore();
+  const { requestHistory, config, doTestRequest, status } = useGatewayStore();
+  const [selectedApiKey, setSelectedApiKey] = useState("all");
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testModel, setTestModel] = useState("");
   const [testMessage, setTestMessage] = useState("Hello! Can you respond with a short greeting?");
   const [isSending, setIsSending] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
+
+  const apiKeys = useMemo(() => {
+    const keys = new Set<string>();
+    requestHistory.forEach((req) => {
+      if (req.api_key) keys.add(req.api_key);
+    });
+    if (config?.gateway?.api_keys) {
+      config.gateway.api_keys.forEach((k) => keys.add(k));
+    }
+    return Array.from(keys);
+  }, [requestHistory, config]);
+
+  const filteredHistory = useMemo(() => {
+    if (selectedApiKey === "all") return requestHistory;
+    return requestHistory.filter((req) => req.api_key === selectedApiKey);
+  }, [requestHistory, selectedApiKey]);
+
+  const latencyData = useMemo(() => buildLatencyDataFromHistory(filteredHistory), [filteredHistory]);
+  const volumeData = useMemo(() => buildVolumeDataFromHistory(filteredHistory), [filteredHistory]);
+  const errorData = useMemo(() => buildErrorDataFromHistory(filteredHistory), [filteredHistory]);
 
   const handleTestRequest = async () => {
     if (!testModel.trim() || !testMessage.trim()) return;
@@ -103,18 +129,41 @@ export function MonitoringTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-white">Monitoring & Analytics</h2>
           <p className="text-sm text-zinc-500 mt-0.5">Real-time performance metrics across all providers</p>
         </div>
-        <button
-          onClick={openTestDialog}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all duration-200"
-        >
-          <Send className="w-4 h-4" />
-          Send Test Request
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* API Key selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">API Key:</span>
+            <select
+              value={selectedApiKey}
+              onChange={(e) => setSelectedApiKey(e.target.value)}
+              className="h-9 px-3 rounded-lg bg-[#11111a] border border-white/[0.06] text-xs text-white focus:outline-none focus:border-cyan-500/30"
+            >
+              <option value="all">All API Keys</option>
+              {apiKeys.map((key) => {
+                const label = config?.gateway?.api_key_labels?.[key] || "Client Key";
+                const displayKey = `${key.slice(0, 11)}***...${key.slice(-4)}`;
+                return (
+                  <option key={key} value={key}>
+                    {label} ({displayKey})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <button
+            onClick={openTestDialog}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all duration-200"
+          >
+            <Send className="w-4 h-4" />
+            Send Test Request
+          </button>
+        </div>
       </div>
 
       {/* Latency Chart */}

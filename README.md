@@ -28,6 +28,10 @@ LLM Gateway/
 │   ├── docker-compose.yml
 │   └── Caddyfile
 │
+├── scripts/             # Build & dev utility scripts
+│   ├── dev.sh
+│   ├── build.sh
+│   └── start.sh
 └── docs/                # Documentation
     ├── GATEWAY_README.md
     ├── worklog.md

@@ -16,7 +16,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import (
+from backend.config import (
     AppConfig,
     ProviderConfig,
     add_provider_to_config,
@@ -27,11 +27,11 @@ from config import (
     set_config,
     update_provider_in_config,
 )
-from health import ProviderHealthTracker
-from history import request_history
-from logger import get_logger, log_request, setup_logging
-from proxy import close_client
-from router import route_non_streaming, route_streaming
+from backend.health import ProviderHealthTracker
+from backend.history import request_history
+from backend.logger import get_logger, log_request, setup_logging
+from backend.proxy import close_client
+from backend.router import route_non_streaming, route_streaming
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def create_app() -> FastAPI:
 
     # ---- Auth helper -------------------------------------------------------
 
-    def _check_auth(authorization: Optional[str], require_admin: bool = False) -> None:
+    def _check_auth(authorization: Optional[str], request: Optional[Request] = None, require_admin: bool = False) -> None:
         if not authorization:
             raise HTTPException(status_code=401, detail="Missing Authorization header")
         if not authorization.startswith("Bearer "):
@@ -73,6 +73,8 @@ def create_app() -> FastAPI:
         valid_keys = cfg.gateway.effective_admin_keys if require_admin else cfg.gateway.api_keys
         if token not in valid_keys:
             raise HTTPException(status_code=401, detail="Invalid API key")
+        if request:
+            request.state.api_key = token
 
     # ---- Middleware: request ID -------------------------------------------
 
@@ -91,7 +93,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request, authorization: Optional[str] = Header(None)):
-        _check_auth(authorization)
+        _check_auth(authorization, request=request)
         body = await request.json()
         virtual_model = body.get("model", "")
         stream = body.get("stream", False)
@@ -107,7 +109,7 @@ def create_app() -> FastAPI:
             total_latency = time.monotonic() - start
             served_by = attempt_log[-1]["provider_id"] if attempt_log else None
             log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
-            request_history.add(virtual_model, served_by, attempt_log, status, total_latency)
+            request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
 
             if 200 <= status < 300 and stream_iter is not None:
                 return StreamingResponse(
@@ -134,7 +136,7 @@ def create_app() -> FastAPI:
             total_latency = time.monotonic() - start
             served_by = attempt_log[-1]["provider_id"] if attempt_log else None
             log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
-            rec = request_history.add(virtual_model, served_by, attempt_log, status, total_latency)
+            rec = request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
             # Enrich the response with gateway metadata
             if isinstance(resp_body, dict):
                 resp_body["_gateway"] = {
@@ -157,7 +159,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/completions")
     async def completions(request: Request, authorization: Optional[str] = Header(None)):
-        _check_auth(authorization)
+        _check_auth(authorization, request=request)
         body = await request.json()
         virtual_model = body.get("model", "")
         stream = body.get("stream", False)
@@ -172,7 +174,7 @@ def create_app() -> FastAPI:
             total_latency = time.monotonic() - start
             served_by = attempt_log[-1]["provider_id"] if attempt_log else None
             log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
-            request_history.add(virtual_model, served_by, attempt_log, status, total_latency)
+            request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
 
             if 200 <= status < 300 and stream_iter is not None:
                 return StreamingResponse(
@@ -191,7 +193,7 @@ def create_app() -> FastAPI:
             total_latency = time.monotonic() - start
             served_by = attempt_log[-1]["provider_id"] if attempt_log else None
             log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
-            request_history.add(virtual_model, served_by, attempt_log, status, total_latency)
+            request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
 
             return JSONResponse(
                 status_code=status,
@@ -203,7 +205,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/embeddings")
     async def embeddings(request: Request, authorization: Optional[str] = Header(None)):
-        _check_auth(authorization)
+        _check_auth(authorization, request=request)
         body = await request.json()
         virtual_model = body.get("model", "")
         request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
@@ -215,7 +217,7 @@ def create_app() -> FastAPI:
         total_latency = time.monotonic() - start
         served_by = attempt_log[-1]["provider_id"] if attempt_log else None
         log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
-        request_history.add(virtual_model, served_by, attempt_log, status, total_latency)
+        request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
 
         return JSONResponse(
             status_code=status,
@@ -406,6 +408,65 @@ def create_app() -> FastAPI:
         _check_auth(authorization, require_admin=True)
         records = request_history.get_recent(limit=limit)
         return JSONResponse(content=records)
+
+    @app.post("/admin/providers/{provider_id}/test")
+    async def admin_test_provider(provider_id: str, authorization: Optional[str] = Header(None)):
+        _check_auth(authorization, require_admin=True)
+        cfg = get_config()
+        provider = None
+        for p in cfg.providers:
+            if p.id == provider_id:
+                provider = p
+                break
+        if not provider:
+            raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found")
+        
+        if not provider.models:
+            return JSONResponse(status_code=400, content={
+                "status": "error",
+                "message": "No model mappings configured for this provider. Cannot test."
+            })
+        
+        actual_model = list(provider.models.values())[0]
+        test_url = f"{provider.base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if provider.api_key:
+            headers["Authorization"] = f"Bearer {provider.api_key}"
+            
+        payload = {
+            "model": actual_model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 5
+        }
+        
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(test_url, json=payload, headers=headers)
+                if response.status_code == 200:
+                    try:
+                        res_data = response.json()
+                        content = res_data.get("choices", [{}])[0].get("message", {}).get("content", "OK")
+                    except Exception:
+                        content = response.text[:200]
+                    return JSONResponse(content={
+                        "status": "ok",
+                        "message": f"Successfully reached {provider_id} using model '{actual_model}'",
+                        "response": content
+                    })
+                else:
+                    return JSONResponse(status_code=response.status_code, content={
+                        "status": "error",
+                        "message": f"Provider returned status {response.status_code}",
+                        "details": response.text[:500]
+                    })
+        except Exception as exc:
+            return JSONResponse(status_code=502, content={
+                "status": "error",
+                "message": f"Failed to connect to provider: {str(exc)}"
+            })
 
     # ---- Health check (no auth) -------------------------------------------
 

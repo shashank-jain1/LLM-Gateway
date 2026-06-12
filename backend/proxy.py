@@ -14,8 +14,8 @@ from typing import Any, AsyncIterator, Dict, Optional, Tuple
 
 import httpx
 
-from config import ProviderConfig, get_config
-from health import ProviderHealthTracker
+from backend.config import ProviderConfig, get_config
+from backend.health import ProviderHealthTracker
 
 
 # Shared httpx client (connection-pooled)

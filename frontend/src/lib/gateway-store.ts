@@ -13,6 +13,7 @@ import {
   deleteProvider,
   updateProvider,
   sendTestRequest,
+  testProvider,
   buildLatencyDataFromHistory,
   buildVolumeDataFromHistory,
   buildErrorDataFromHistory,
@@ -53,6 +54,7 @@ interface GatewayStore {
   doAddProvider: (provider: { id: string; enabled: boolean; priority: number; base_url: string; api_key: string; models: Record<string, string> }) => Promise<boolean>;
   doDeleteProvider: (providerId: string) => Promise<boolean>;
   doUpdateProvider: (providerId: string, updates: Record<string, any>) => Promise<boolean>;
+  doTestProvider: (providerId: string) => Promise<{ success: boolean; message: string }>;
   doTestRequest: (model: string, messages: Array<{ role: string; content: string }>) => Promise<any>;
   addToast: (message: string, type?: "success" | "error") => void;
   removeToast: (id: string) => void;
@@ -232,6 +234,22 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
     } catch {
       get().addToast("Gateway unreachable", "error");
       return false;
+    }
+  },
+
+  doTestProvider: async (providerId) => {
+    try {
+      const result = await testProvider(providerId);
+      if (result.status === "ok") {
+        get().addToast(`Provider '${providerId}' test succeeded!`, "success");
+        return { success: true, message: result.response || result.message };
+      } else {
+        get().addToast(`Provider '${providerId}' test failed`, "error");
+        return { success: false, message: result.details || result.message };
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return { success: false, message: "Gateway unreachable" };
     }
   },
 

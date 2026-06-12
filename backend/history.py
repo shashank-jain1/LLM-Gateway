@@ -25,6 +25,7 @@ class RequestRecord:
     tokens_used: Optional[int] = None
     error: Optional[str] = None
     attempts: List[Dict[str, Any]] = field(default_factory=list)
+    api_key: Optional[str] = None
 
 
 class RequestHistory:
@@ -41,6 +42,7 @@ class RequestHistory:
         attempt_log: List[Dict[str, Any]],
         final_status: int,
         total_latency: float,
+        api_key: Optional[str] = None,
     ) -> RequestRecord:
         self._counter += 1
         req_id = f"req-{self._counter:06d}"
@@ -65,6 +67,7 @@ class RequestHistory:
             status_code=final_status,
             latency_ms=total_latency * 1000,  # convert to ms
             attempts=attempt_log,
+            api_key=api_key,
         )
         self._records.append(record)
         return record
@@ -86,6 +89,7 @@ class RequestHistory:
                 "tokens_used": r.tokens_used,
                 "error": r.error,
                 "attempt_count": len(r.attempts),
+                "api_key": r.api_key,
             })
         return result
 

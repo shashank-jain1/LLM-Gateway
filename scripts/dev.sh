@@ -7,6 +7,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Check package manager (bun or npm)
+if command -v bun >/dev/null 2>&1; then
+	PKG_MANAGER="bun"
+	PKG_INSTALL=("bun" "install")
+	PKG_RUN_DB_PUSH=("bun" "run" "db:push")
+	PKG_RUN_DEV=("bun" "run" "dev")
+elif command -v npm >/dev/null 2>&1; then
+	PKG_MANAGER="npm"
+	PKG_INSTALL=("npm" "install")
+	PKG_RUN_DB_PUSH=("npm" "run" "db:push")
+	PKG_RUN_DEV=("npm" "run" "dev")
+else
+	echo "ERROR: Neither bun nor npm is installed or in PATH"
+	exit 1
+fi
+
 log_step_start() {
 	local step_name="$1"
 	echo "=========================================="
@@ -64,9 +80,9 @@ start_mini_services() {
 		(
 			cd "$service_dir"
 			echo "[$service_name] Installing dependencies..."
-			bun install
-			echo "[$service_name] Running bun run dev..."
-			exec bun run dev
+			"${PKG_INSTALL[@]}"
+			echo "[$service_name] Running ${PKG_RUN_DEV[*]}..."
+			exec "${PKG_RUN_DEV[@]}"
 		) >"$PROJECT_DIR/.zscripts/mini-service-${service_name}.log" 2>&1 &
 
 		local service_pid=$!
@@ -113,26 +129,21 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-cd "$PROJECT_DIR"
+cd "$PROJECT_DIR/frontend"
 
-if ! command -v bun >/dev/null 2>&1; then
-	echo "ERROR: bun is not installed or not in PATH"
-	exit 1
-fi
+log_step_start "${PKG_INSTALL[*]}"
+echo "[$PKG_MANAGER] Installing dependencies..."
+"${PKG_INSTALL[@]}"
+log_step_end "${PKG_INSTALL[*]}"
 
-log_step_start "bun install"
-echo "[BUN] Installing dependencies..."
-bun install
-log_step_end "bun install"
-
-log_step_start "bun run db:push"
-echo "[BUN] Setting up database..."
-bun run db:push
-log_step_end "bun run db:push"
+log_step_start "${PKG_RUN_DB_PUSH[*]}"
+echo "[$PKG_MANAGER] Setting up database..."
+"${PKG_RUN_DB_PUSH[@]}"
+log_step_end "${PKG_RUN_DB_PUSH[*]}"
 
 log_step_start "Starting Next.js dev server"
-echo "[BUN] Starting development server..."
-bun run dev &
+echo "[$PKG_MANAGER] Starting development server..."
+"${PKG_RUN_DEV[@]}" &
 DEV_PID=$!
 log_step_end "Starting Next.js dev server"
 
@@ -141,9 +152,9 @@ wait_for_service "localhost" "3000" "Next.js dev server"
 log_step_end "Waiting for Next.js dev server"
 
 log_step_start "Health check"
-echo "[BUN] Performing health check..."
+echo "[$PKG_MANAGER] Performing health check..."
 curl -fsS localhost:3000 >/dev/null
-echo "[BUN] Health check passed"
+echo "[$PKG_MANAGER] Health check passed"
 log_step_end "Health check"
 
 start_mini_services

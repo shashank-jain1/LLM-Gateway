@@ -10,9 +10,9 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import AppConfig, ProviderConfig, get_config
-from health import ProviderHealthTracker, ProviderState
-from proxy import forward_non_streaming, forward_streaming
+from backend.config import AppConfig, ProviderConfig, get_config
+from backend.health import ProviderHealthTracker, ProviderState
+from backend.proxy import forward_non_streaming, forward_streaming
 
 
 # ---------------------------------------------------------------------------

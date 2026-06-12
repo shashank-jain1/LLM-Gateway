@@ -2,13 +2,24 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check, Wifi, WifiOff, RotateCcw } from "lucide-react";
+import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check, Wifi, WifiOff, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { useGatewayStore } from "@/lib/gateway-store";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function SettingsTab() {
   const { doReloadConfig, doSaveConfig, config, isGatewayConnected } = useGatewayStore();
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [visibleKeys, setVisibleKeys] = useState<Record<number, boolean>>({});
+  const [copiedKeyIndex, setCopiedKeyIndex] = useState<number | null>(null);
   const [isReloading, setIsReloading] = useState(false);
   const [reloadSuccess, setReloadSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -21,7 +32,12 @@ export function SettingsTab() {
   const [editMaxCooldown, setEditMaxCooldown] = useState("");
   const [editRequestTimeout, setEditRequestTimeout] = useState("");
   const [editLogLevel, setEditLogLevel] = useState("");
+  const [editApiKeys, setEditApiKeys] = useState<{ key: string; label: string }[]>([]);
   const [hasEdits, setHasEdits] = useState(false);
+
+  // State for generating a new key
+  const [showAddKeyDialog, setShowAddKeyDialog] = useState(false);
+  const [newKeyLabel, setNewKeyLabel] = useState("");
 
   // Initialize edit fields when config loads
   const gateway = config?.gateway;
@@ -33,6 +49,12 @@ export function SettingsTab() {
       setEditMaxCooldown(String(gateway.max_cooldown_seconds));
       setEditRequestTimeout(String(gateway.request_timeout_seconds));
       setEditLogLevel(gateway.log_level);
+      
+      const keysWithLabels = (gateway.api_keys || []).map((k) => ({
+        key: k,
+        label: gateway.api_key_labels?.[k] || "Default Key",
+      }));
+      setEditApiKeys(keysWithLabels);
       setHasEdits(false);
     }
   };
@@ -58,9 +80,16 @@ export function SettingsTab() {
 
   const handleSave = async () => {
     setIsSaving(true);
+    const keysArray = editApiKeys.map((item) => item.key);
+    const labelsMap = editApiKeys.reduce((acc, item) => {
+      acc[item.key] = item.label;
+      return acc;
+    }, {} as Record<string, string>);
+
     const success = await doSaveConfig({
       gateway: {
-        api_keys: gateway?.api_keys ?? ["sk-gateway-mysecretkey123"],
+        api_keys: keysArray.length > 0 ? keysArray : (gateway?.api_keys ?? ["sk-gateway-mysecretkey123"]),
+        api_key_labels: labelsMap,
         port: parseInt(editPort, 10) || 8001,
         host: editHost || "0.0.0.0",
         default_cooldown_seconds: parseFloat(editDefaultCooldown) || 30.0,
@@ -81,15 +110,46 @@ export function SettingsTab() {
     initEditsFromConfig();
   };
 
-  const handleCopy = (text: string) => {
+  const handleCopy = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedKeyIndex(index);
+    setTimeout(() => setCopiedKeyIndex(null), 2000);
+  };
+
+  const handleOpenAddKeyDialog = () => {
+    setNewKeyLabel("");
+    setShowAddKeyDialog(true);
+  };
+
+  const handleGenerateKey = () => {
+    if (!newKeyLabel.trim()) return;
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let token = "sk-gateway-";
+    for (let i = 0; i < 32; i++) {
+      token += chars[Math.floor(Math.random() * chars.length)];
+    }
+    setEditApiKeys([...editApiKeys, { key: token, label: newKeyLabel.trim() }]);
+    setShowAddKeyDialog(false);
+    markEdited();
+  };
+
+  const deleteKey = (index: number) => {
+    if (editApiKeys.length <= 1) {
+      alert("At least one API key is required to authenticate requests.");
+      return;
+    }
+    const updated = editApiKeys.filter((_, i) => i !== index);
+    setEditApiKeys(updated);
+    markEdited();
+  };
+
+  const toggleKeyVisibility = (index: number) => {
+    setVisibleKeys(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
   const gatewayUrl = `http://${gateway?.host ?? "0.0.0.0"}:${gateway?.port ?? 8001}/v1/chat/completions`;
-  const exampleKey = gateway?.api_keys?.[0] ? `${gateway.api_keys[0].slice(0, 6)}***...${gateway.api_keys[0].slice(-4)}` : "sk-***...xxxx";
-  const fullKey = gateway?.api_keys?.[0] ?? "";
+  const exampleKey = editApiKeys[0]?.key ? `${editApiKeys[0].key.slice(0, 6)}***...${editApiKeys[0].key.slice(-4)}` : "sk-***...xxxx";
+  const fullKey = editApiKeys[0]?.key ?? "";
 
   return (
     <div className="space-y-6">
@@ -185,47 +245,87 @@ export function SettingsTab() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, duration: 0.4 }}
-          className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
+          className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5 md:col-span-2 flex flex-col h-full"
         >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">API Key</h3>
-              <p className="text-xs text-zinc-500">Gateway authentication key (live from backend)</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] font-mono text-sm text-zinc-300">
-              <span className="truncate">{showApiKey ? (fullKey || exampleKey) : exampleKey}</span>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Shield className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Client API Keys</h3>
+                <p className="text-xs text-zinc-500">Manage client keys and their labels used to access the gateway</p>
+              </div>
             </div>
             <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+              onClick={handleOpenAddKeyDialog}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all duration-200"
             >
-              {showApiKey ? (
-                <EyeOff className="w-4 h-4 text-zinc-400" />
-              ) : (
-                <Eye className="w-4 h-4 text-zinc-400" />
-              )}
-            </button>
-            <button
-              onClick={() => handleCopy(fullKey || exampleKey)}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-            >
-              {copied ? (
-                <Check className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <Copy className="w-4 h-4 text-zinc-400" />
-              )}
+              <Plus className="w-3.5 h-3.5" />
+              Generate Key
             </button>
           </div>
-          {gateway?.api_keys && gateway.api_keys.length > 1 && (
-            <p className="text-[10px] text-zinc-600 mt-2">
-              {gateway.api_keys.length} API keys configured (showing first)
-            </p>
-          )}
+
+          <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar flex-1">
+            {editApiKeys.map((item, index) => {
+              const keyVisible = visibleKeys[index] || false;
+              const maskedKey = `${item.key.slice(0, 11)}***...${item.key.slice(-4)}`;
+              return (
+                <div key={index} className="flex flex-col gap-1 p-3 rounded-lg bg-black/20 border border-white/[0.04]">
+                  <div className="flex items-center justify-between">
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(e) => {
+                        const updated = [...editApiKeys];
+                        updated[index] = { ...updated[index], label: e.target.value };
+                        setEditApiKeys(updated);
+                        markEdited();
+                      }}
+                      className="bg-transparent text-xs font-semibold text-white focus:outline-none focus:border-b focus:border-cyan-500/30 px-1 py-0.5 max-w-[240px]"
+                      placeholder="API Key Name/Label"
+                    />
+                    
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => toggleKeyVisibility(index)}
+                        className="p-1 rounded bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                        title={keyVisible ? "Hide key" : "Show key"}
+                      >
+                        {keyVisible ? (
+                          <EyeOff className="w-3.5 h-3.5 text-zinc-400" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5 text-zinc-400" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleCopy(item.key, index)}
+                        className="p-1 rounded bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                        title="Copy key"
+                      >
+                        {copiedKeyIndex === index ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => deleteKey(index)}
+                        disabled={editApiKeys.length <= 1}
+                        className="p-1 rounded bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-white/10"
+                        title="Delete key"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-zinc-400 hover:text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="font-mono text-[10px] text-zinc-500 overflow-hidden select-all px-1">
+                    {keyVisible ? item.key : maskedKey}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </motion.div>
       </div>
 
@@ -454,6 +554,54 @@ export function SettingsTab() {
           </button>
         </div>
       </motion.div>
+
+      <Dialog open={showAddKeyDialog} onOpenChange={setShowAddKeyDialog}>
+        <DialogContent className="sm:max-w-[425px] bg-[#11111a] border border-white/[0.06] text-white">
+          <DialogHeader>
+            <DialogTitle>Generate New API Key</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-xs">
+              Give this client key a friendly name/label (e.g. "Production App", "John Doe's Project") to identify it in metrics and logs.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="key-label" className="text-right text-xs text-zinc-400">
+                Label Name
+              </Label>
+              <Input
+                id="key-label"
+                value={newKeyLabel}
+                onChange={(e) => setNewKeyLabel(e.target.value)}
+                placeholder="e.g. Web App Client"
+                className="col-span-3 bg-black/30 border-white/10 focus:border-cyan-500/30 text-white placeholder-zinc-700 text-xs"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newKeyLabel.trim()) {
+                    handleGenerateKey();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowAddKeyDialog(false)}
+              className="text-xs hover:bg-white/5 text-zinc-400 hover:text-zinc-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!newKeyLabel.trim()}
+              onClick={handleGenerateKey}
+              className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs disabled:opacity-50"
+            >
+              Generate & Add Key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

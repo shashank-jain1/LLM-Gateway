@@ -57,11 +57,13 @@ export interface RequestHistoryEntry {
   tokens_used: number | null;
   error: string | null;
   attempt_count: number;
+  api_key: string | null;
 }
 
 export interface GatewayConfig {
   gateway: {
     api_keys: string[];
+    api_key_labels?: Record<string, string>;
     port: number;
     host: string;
     default_cooldown_seconds: number;
@@ -166,6 +168,16 @@ export async function updateProvider(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
     }
+  );
+  return res.json();
+}
+
+export async function testProvider(
+  providerId: string
+): Promise<{ status: string; message: string; response?: string; details?: string }> {
+  const res = await fetch(
+    `/api/gateway/providers/test?provider_id=${encodeURIComponent(providerId)}`,
+    { method: "POST" }
   );
   return res.json();
 }

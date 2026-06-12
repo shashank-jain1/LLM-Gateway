@@ -1,36 +1,26 @@
 gateway:
   api_keys:
   - sk-gateway-mysecretkey123
-  port: 8001
+  api_key_labels:
+    sk-gateway-mysecretkey123: Primary Admin Key
+  port: 8000
   host: 0.0.0.0
   default_cooldown_seconds: 30.0
   max_cooldown_seconds: 600.0
   request_timeout_seconds: 60.0
   log_level: info
 providers:
-- id: openai-primary
+- id: NVIDIA
   enabled: true
   priority: 1
-  base_url: https://api.openai.com/v1
-  api_key: sk-placeholder-key
+  base_url: https://integrate.api.nvidia.com/v1
+  api_key: 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
   models:
-    gpt-4o: gpt-4o
-    gpt-4o-mini: gpt-4o-mini
-    text-embedding-3-small: text-embedding-3-small
-- id: groq-backup
+    moonshotai/kimi-k2.6: moonshotai/kimi-k2.6
+- id: moonshot
   enabled: true
-  priority: 2
-  base_url: https://api.groq.com/openai/v1
-  api_key: gsk-placeholder-key
+  priority: 1
+  base_url: https://integrate.api.nvidia.com/v1
+  api_key: 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
   models:
-    gpt-4o: llama-3.3-70b-versatile
-    gpt-4o-mini: llama-3.1-8b-instant
-- id: together-backup
-  enabled: true
-  priority: 3
-  base_url: https://api.together.xyz/v1
-  api_key: together-placeholder-key
-  models:
-    gpt-4o: meta-llama/Llama-3.3-70B-Instruct-Turbo
-    gpt-4o-mini: meta-llama/Llama-3.1-8B-Instruct-Turbo
-    text-embedding-3-small: togethercomputer/m2-bert-80M-8k-retrieval
+    z-ai/glm-5.1: z-ai/glm-5.1

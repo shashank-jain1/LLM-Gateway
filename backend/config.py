@@ -27,6 +27,10 @@ class GatewaySettings(BaseModel):
         default=None,
         description="Optional separate keys for admin endpoints. Falls back to api_keys if unset.",
     )
+    api_key_labels: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of api_key -> human-readable label/name",
+    )
     port: int = 8000
     host: str = "0.0.0.0"
     default_cooldown_seconds: float = 30.0

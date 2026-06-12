@@ -15,6 +15,8 @@ import {
   X,
   Hash,
   Boxes,
+  Edit,
+  Play,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -47,11 +49,21 @@ interface ModelMapping {
 }
 
 export function ProvidersTab() {
-  const { status, doToggleProvider, doAddProvider, doDeleteProvider } = useGatewayStore();
+  const { status, config, doToggleProvider, doAddProvider, doDeleteProvider, doUpdateProvider, doTestProvider } = useGatewayStore();
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResultModal, setTestResultModal] = useState<{
+    open: boolean;
+    providerId: string;
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // Add provider form state
   const [formId, setFormId] = useState("");
@@ -74,6 +86,64 @@ export function ProvidersTab() {
     setDeletingId(providerId);
     await doDeleteProvider(providerId);
     setDeletingId(null);
+  };
+
+  const openEditDialog = (providerId: string) => {
+    const providerConfig = config?.providers.find((p) => p.id === providerId);
+    if (!providerConfig) return;
+
+    setEditingId(providerId);
+    setFormId(providerId);
+    setFormBaseUrl(providerConfig.base_url);
+    setFormApiKey(providerConfig.api_key || "");
+    setFormPriority(String(providerConfig.priority));
+    setFormEnabled(providerConfig.enabled);
+    
+    const mappings = Object.entries(providerConfig.models || {}).map(([virtual, actual]) => ({
+      virtual,
+      actual,
+    }));
+    setFormModels(mappings.length > 0 ? mappings : [{ virtual: "", actual: "" }]);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditProvider = async () => {
+    if (!editingId || !formBaseUrl.trim() || !formApiKey.trim()) return;
+
+    const modelMappings: Record<string, string> = {};
+    for (const m of formModels) {
+      if (m.virtual.trim() && m.actual.trim()) {
+        modelMappings[m.virtual.trim()] = m.actual.trim();
+      }
+    }
+
+    setIsEditing(true);
+    const success = await doUpdateProvider(editingId, {
+      base_url: formBaseUrl.trim(),
+      api_key: formApiKey.trim(),
+      priority: parseInt(formPriority, 10) || 1,
+      enabled: formEnabled,
+      models: modelMappings,
+    });
+    setIsEditing(false);
+
+    if (success) {
+      resetForm();
+      setEditDialogOpen(false);
+      setEditingId(null);
+    }
+  };
+
+  const handleTestProvider = async (providerId: string) => {
+    setTestingId(providerId);
+    const result = await doTestProvider(providerId);
+    setTestingId(null);
+    setTestResultModal({
+      open: true,
+      providerId,
+      success: result.success,
+      message: result.message,
+    });
   };
 
   const resetForm = () => {
@@ -305,6 +375,32 @@ export function ProvidersTab() {
 
                 {/* Right: Actions */}
                 <div className="flex flex-row lg:flex-col items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleTestProvider(provider.provider_id)}
+                    disabled={testingId === provider.provider_id}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all duration-200 disabled:opacity-50"
+                  >
+                    {testingId === provider.provider_id ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5" />
+                        Test
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => openEditDialog(provider.provider_id)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all duration-200"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    Edit
+                  </button>
+
                   <button
                     onClick={() => handleToggle(provider.provider_id, provider.enabled)}
                     disabled={isToggling}
@@ -596,6 +692,190 @@ export function ProvidersTab() {
                   Add Provider
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Provider Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open);
+        if (!open) setEditingId(null);
+      }}>
+        <DialogContent className="bg-[#1a1a2e] border-white/10 text-white sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Provider: {editingId}</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Update configuration for this provider
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Base URL */}
+            <div className="space-y-2">
+              <Label className="text-zinc-300 text-xs">Base URL</Label>
+              <Input
+                value={formBaseUrl}
+                onChange={(e) => setFormBaseUrl(e.target.value)}
+                placeholder="e.g. https://api.openai.com/v1"
+                className="bg-black/30 border-white/10 text-white placeholder-zinc-600 text-sm font-mono"
+              />
+            </div>
+
+            {/* API Key */}
+            <div className="space-y-2">
+              <Label className="text-zinc-300 text-xs">API Key</Label>
+              <Input
+                type="password"
+                value={formApiKey}
+                onChange={(e) => setFormApiKey(e.target.value)}
+                placeholder="••••••••••••••••"
+                className="bg-black/30 border-white/10 text-white placeholder-zinc-600 text-sm font-mono"
+              />
+            </div>
+
+            {/* Priority + Enabled */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-zinc-300 text-xs">Priority</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={formPriority}
+                  onChange={(e) => setFormPriority(e.target.value)}
+                  className="bg-black/30 border-white/10 text-white text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300 text-xs">Enabled</Label>
+                <div className="flex items-center gap-3 h-9">
+                  <Switch
+                    checked={formEnabled}
+                    onCheckedChange={setFormEnabled}
+                  />
+                  <span className={`text-sm ${formEnabled ? "text-emerald-400" : "text-zinc-500"}`}>
+                    {formEnabled ? "Yes" : "No"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Model Mappings */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-zinc-300 text-xs">Model Mappings</Label>
+                <button
+                  onClick={addModelRow}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add mapping
+                </button>
+              </div>
+              <div className="space-y-2">
+                {formModels.map((mapping, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={mapping.virtual}
+                      onChange={(e) => updateModelRow(index, "virtual", e.target.value)}
+                      placeholder="Virtual model"
+                      className="flex-1 bg-black/30 border-white/10 text-white placeholder-zinc-600 text-xs font-mono"
+                    />
+                    <span className="text-zinc-600 text-xs">→</span>
+                    <Input
+                      value={mapping.actual}
+                      onChange={(e) => updateModelRow(index, "actual", e.target.value)}
+                      placeholder="Actual model"
+                      className="flex-1 bg-black/30 border-white/10 text-white placeholder-zinc-600 text-xs font-mono"
+                    />
+                    {formModels.length > 1 && (
+                      <button
+                        onClick={() => removeModelRow(index)}
+                        className="p-1.5 rounded hover:bg-white/5 text-zinc-600 hover:text-rose-400 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-600">
+                Map virtual model names (used by clients) to actual provider model names
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false);
+                setEditingId(null);
+              }}
+              className="bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditProvider}
+              disabled={!formBaseUrl.trim() || !formApiKey.trim() || isEditing}
+              className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50"
+            >
+              {isEditing ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Result Dialog */}
+      <Dialog open={!!testResultModal?.open} onOpenChange={(open) => {
+        if (!open) setTestResultModal(null);
+      }}>
+        <DialogContent className="bg-[#1a1a2e] border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              {testResultModal?.success ? (
+                <span className="text-emerald-400">✓ Test Succeeded</span>
+              ) : (
+                <span className="text-rose-400">✗ Test Failed</span>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Direct connection test for provider <span className="font-mono text-zinc-300 font-semibold">{testResultModal?.providerId}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className={`p-4 rounded-xl border ${
+              testResultModal?.success 
+                ? "bg-emerald-500/5 border-emerald-500/20 text-zinc-300" 
+                : "bg-rose-500/5 border-rose-500/20 text-rose-300"
+            }`}>
+              <span className="text-xs font-semibold uppercase tracking-wider block mb-2 text-zinc-400">
+                {testResultModal?.success ? "Provider Response" : "Error details"}
+              </span>
+              <p className="text-sm font-mono whitespace-pre-wrap break-all max-h-[200px] overflow-y-auto">
+                {testResultModal?.message}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => setTestResultModal(null)}
+              className="bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+            >
+              Dismiss
             </Button>
           </DialogFooter>
         </DialogContent>
