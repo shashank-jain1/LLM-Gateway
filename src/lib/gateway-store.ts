@@ -5,6 +5,8 @@ import {
   getGatewayStatus,
   getRequestHistory,
   getModels,
+  reloadConfig,
+  toggleProvider,
   type GatewayStatus,
   type ModelsResponse,
   type RequestHistoryEntry,
@@ -26,6 +28,7 @@ interface GatewayStore {
   isLoading: boolean;
   activeTab: string;
   sidebarCollapsed: boolean;
+  toasts: Array<{ id: string; message: string; type: "success" | "error" }>;
 
   // Actions
   fetchStatus: () => Promise<void>;
@@ -34,7 +37,13 @@ interface GatewayStore {
   refreshAll: () => Promise<void>;
   setActiveTab: (tab: string) => void;
   toggleSidebar: () => void;
+  doReloadConfig: () => Promise<boolean>;
+  doToggleProvider: (providerId: string, action: "enable" | "disable") => Promise<boolean>;
+  addToast: (message: string, type?: "success" | "error") => void;
+  removeToast: (id: string) => void;
 }
+
+let toastCounter = 0;
 
 export const useGatewayStore = create<GatewayStore>((set, get) => ({
   status: null,
@@ -46,6 +55,7 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
   isLoading: false,
   activeTab: "overview",
   sidebarCollapsed: false,
+  toasts: [],
 
   fetchStatus: async () => {
     try {
@@ -77,7 +87,11 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
   refreshAll: async () => {
     set({ isLoading: true });
     try {
-      await Promise.all([get().fetchStatus(), get().fetchModels(), get().fetchRequestHistory()]);
+      await Promise.all([
+        get().fetchStatus(),
+        get().fetchModels(),
+        get().fetchRequestHistory(),
+      ]);
       set({
         latencyData: generateLatencyTimeline(),
         volumeData: generateRequestVolume(),
@@ -90,4 +104,48 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
+  doReloadConfig: async () => {
+    try {
+      const result = await reloadConfig();
+      if (result.status === "ok") {
+        get().addToast("Config reloaded successfully", "success");
+        await get().refreshAll();
+        return true;
+      } else {
+        get().addToast(result.message || "Failed to reload config", "error");
+        return false;
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return false;
+    }
+  },
+
+  doToggleProvider: async (providerId, action) => {
+    try {
+      const result = await toggleProvider(providerId, action);
+      if (result.status === "ok") {
+        get().addToast(`Provider ${providerId} ${action}d`, "success");
+        await get().fetchStatus();
+        return true;
+      } else {
+        get().addToast(result.message || `Failed to ${action} provider`, "error");
+        return false;
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return false;
+    }
+  },
+
+  addToast: (message, type = "success") => {
+    const id = `toast-${++toastCounter}`;
+    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
+    setTimeout(() => get().removeToast(id), 3500);
+  },
+
+  removeToast: (id) => {
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  },
 }));

@@ -6,6 +6,7 @@ import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check
 import { useGatewayStore } from "@/lib/gateway-store";
 
 export function SettingsTab() {
+  const { doReloadConfig } = useGatewayStore();
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
@@ -13,10 +14,12 @@ export function SettingsTab() {
 
   const handleReload = async () => {
     setIsReloading(true);
-    await new Promise((r) => setTimeout(r, 1200));
+    const success = await doReloadConfig();
     setIsReloading(false);
-    setReloadSuccess(true);
-    setTimeout(() => setReloadSuccess(false), 2000);
+    if (success) {
+      setReloadSuccess(true);
+      setTimeout(() => setReloadSuccess(false), 2000);
+    }
   };
 
   const handleCopy = (text: string) => {
@@ -98,19 +101,27 @@ export function SettingsTab() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] font-mono text-sm text-zinc-300">
-              <span className="truncate">{showApiKey ? exampleKey : "sk-gate••••••••••••"}</span>
+              <span className="truncate">{showApiKey ? exampleKey : "sk-gate\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}</span>
             </div>
             <button
               onClick={() => setShowApiKey(!showApiKey)}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
             >
-              {showApiKey ? <EyeOff className="w-4 h-4 text-zinc-400" /> : <Eye className="w-4 h-4 text-zinc-400" />}
+              {showApiKey ? (
+                <EyeOff className="w-4 h-4 text-zinc-400" />
+              ) : (
+                <Eye className="w-4 h-4 text-zinc-400" />
+              )}
             </button>
             <button
               onClick={() => handleCopy(exampleKey)}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-zinc-400" />}
+              {copied ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Copy className="w-4 h-4 text-zinc-400" />
+              )}
             </button>
           </div>
         </motion.div>
@@ -205,7 +216,11 @@ export function SettingsTab() {
   }'`}
           </pre>
           <button
-            onClick={() => handleCopy(`curl -X POST ${gatewayUrl} -H "Authorization: Bearer ${exampleKey}" -H "Content-Type: application/json" -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}],"stream":false}'`)}
+            onClick={() =>
+              handleCopy(
+                `curl -X POST ${gatewayUrl} -H "Authorization: Bearer ${exampleKey}" -H "Content-Type: application/json" -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}],"stream":false}'`
+              )
+            }
             className="absolute top-2 right-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-colors"
           >
             <Copy className="w-3.5 h-3.5 text-zinc-500" />

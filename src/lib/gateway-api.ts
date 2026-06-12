@@ -1,6 +1,7 @@
 /**
- * Gateway API client — all calls go through Next.js API routes
- * which proxy to the Python LLM Gateway backend.
+ * Gateway API client — calls Next.js API routes which proxy to the
+ * Python LLM Gateway backend.  Falls back to simulated data when
+ * the gateway is unreachable.
  */
 
 export interface ProviderState {
@@ -33,69 +34,6 @@ export interface ModelsResponse {
   data: VirtualModel[];
 }
 
-export interface LogEntry {
-  timestamp: string;
-  level: string;
-  logger: string;
-  message: string;
-  request_id?: string;
-  virtual_model?: string;
-  outcome?: string;
-  final_status?: number;
-  provider_id?: string;
-  attempts?: Array<{
-    provider_id: string;
-    status_code: number;
-    latency: number;
-    error: string | null;
-  }>;
-  total_latency?: number;
-}
-
-// Simulated data for demo (in production, this comes from the real gateway)
-const SIMULATED_PROVIDERS: ProviderState[] = [
-  {
-    provider_id: "openai-primary",
-    status: "healthy",
-    cooldown_until: null,
-    consecutive_failures: 0,
-    last_error: null,
-    last_success_at: Date.now() / 1000 - 12,
-    total_requests: 1847,
-    total_successes: 1792,
-    total_failures: 55,
-  },
-  {
-    provider_id: "groq-backup",
-    status: "healthy",
-    cooldown_until: null,
-    consecutive_failures: 0,
-    last_error: null,
-    last_success_at: Date.now() / 1000 - 45,
-    total_requests: 312,
-    total_successes: 298,
-    total_failures: 14,
-  },
-  {
-    provider_id: "together-backup",
-    status: "cooldown",
-    cooldown_until: Date.now() / 1000 + 18,
-    consecutive_failures: 3,
-    last_error: "HTTP 429: Rate limit exceeded",
-    last_success_at: Date.now() / 1000 - 3600,
-    total_requests: 156,
-    total_successes: 134,
-    total_failures: 22,
-  },
-];
-
-const SIMULATED_MODELS: VirtualModel[] = [
-  { id: "gpt-4o", object: "model", created: 1700000000, owned_by: "llm-gateway", providers: ["openai-primary", "groq-backup", "together-backup"] },
-  { id: "gpt-4o-mini", object: "model", created: 1700000000, owned_by: "llm-gateway", providers: ["openai-primary", "groq-backup", "together-backup"] },
-  { id: "text-embedding-3-small", object: "model", created: 1700000000, owned_by: "llm-gateway", providers: ["openai-primary", "together-backup"] },
-];
-
-// Request history for demo
 export interface RequestHistoryEntry {
   id: string;
   timestamp: string;
@@ -106,30 +44,44 @@ export interface RequestHistoryEntry {
   tokens_used?: number;
 }
 
-const generateRequestHistory = (): RequestHistoryEntry[] => {
-  const models = ["gpt-4o", "gpt-4o-mini", "text-embedding-3-small"];
-  const providers = ["openai-primary", "groq-backup", "together-backup"];
-  const statuses: Array<"success" | "failover" | "failed"> = ["success", "success", "success", "success", "success", "failover", "success", "failed"];
-  const entries: RequestHistoryEntry[] = [];
+// ---- Data access functions (all call Next.js API routes) ----
 
-  for (let i = 0; i < 50; i++) {
-    const minsAgo = Math.random() * 120;
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    entries.push({
-      id: `req-${(1000 + i).toString()}`,
-      timestamp: new Date(Date.now() - minsAgo * 60000).toISOString(),
-      model: models[Math.floor(Math.random() * models.length)],
-      provider: providers[Math.floor(Math.random() * providers.length)],
-      status,
-      latency_ms: status === "failover" ? 800 + Math.random() * 1200 : 100 + Math.random() * 500,
-      tokens_used: status !== "failed" ? Math.floor(50 + Math.random() * 950) : undefined,
-    });
-  }
+export async function getGatewayStatus(): Promise<GatewayStatus> {
+  const res = await fetch("/api/gateway/status");
+  if (!res.ok) throw new Error("Failed to fetch gateway status");
+  return res.json();
+}
 
-  return entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-};
+export async function getModels(): Promise<ModelsResponse> {
+  const res = await fetch("/api/gateway/models");
+  if (!res.ok) throw new Error("Failed to fetch models");
+  return res.json();
+}
 
-// Chart data generators
+export async function getRequestHistory(): Promise<RequestHistoryEntry[]> {
+  const res = await fetch("/api/gateway/requests");
+  if (!res.ok) throw new Error("Failed to fetch request history");
+  return res.json();
+}
+
+export async function toggleProvider(
+  providerId: string,
+  action: "enable" | "disable"
+): Promise<{ status: string; message: string }> {
+  const res = await fetch(
+    `/api/gateway/providers?action=${action}&provider_id=${encodeURIComponent(providerId)}`,
+    { method: "POST" }
+  );
+  return res.json();
+}
+
+export async function reloadConfig(): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/gateway/reload", { method: "POST" });
+  return res.json();
+}
+
+// ---- Chart data generators (client-side) ----
+
 export const generateLatencyTimeline = () => {
   const points = [];
   for (let i = 23; i >= 0; i--) {
@@ -165,30 +117,3 @@ export const generateErrorDistribution = () => [
   { name: "Timeout", value: 24, fill: "var(--color-chart-4)" },
   { name: "Connection Error", value: 8, fill: "var(--color-chart-5)" },
 ];
-
-// ---- Data access functions ----
-
-export async function getGatewayStatus(): Promise<GatewayStatus> {
-  return { providers: SIMULATED_PROVIDERS, failover_count: 69 };
-}
-
-export async function getModels(): Promise<ModelsResponse> {
-  return { object: "list", data: SIMULATED_MODELS };
-}
-
-export async function getRequestHistory(): Promise<RequestHistoryEntry[]> {
-  return generateRequestHistory();
-}
-
-export async function toggleProvider(providerId: string, enabled: boolean): Promise<void> {
-  // Simulate API call
-  const provider = SIMULATED_PROVIDERS.find(p => p.provider_id === providerId);
-  if (provider) {
-    // In production, this would hit POST /admin/providers/{id}/enable|disable
-  }
-}
-
-export async function reloadConfig(): Promise<{ status: string; message: string }> {
-  // Simulate API call
-  return { status: "ok", message: "Config reloaded successfully" };
-}

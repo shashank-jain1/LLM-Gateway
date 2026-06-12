@@ -9,6 +9,7 @@ import { ModelsTab } from "@/components/dashboard/models-tab";
 import { MonitoringTab } from "@/components/dashboard/monitoring-tab";
 import { LogsTab } from "@/components/dashboard/logs-tab";
 import { SettingsTab } from "@/components/dashboard/settings-tab";
+import { ToastContainer } from "@/components/dashboard/toast-container";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function Dashboard() {
@@ -63,6 +64,7 @@ export function Dashboard() {
                 onClick={refreshAll}
                 disabled={isLoading}
                 className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 disabled:opacity-50"
+                title="Refresh data"
               >
                 <svg
                   className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
@@ -91,6 +93,9 @@ export function Dashboard() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Toast Notifications */}
+      <ToastContainer />
     </div>
   );
 }

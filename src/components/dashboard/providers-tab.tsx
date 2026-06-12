@@ -10,23 +10,20 @@ import {
   ToggleRight,
   RotateCcw,
   Clock,
-  Activity,
-  ArrowUpDown,
-  Key,
   Globe,
 } from "lucide-react";
 import { useState } from "react";
 
 export function ProvidersTab() {
-  const { status } = useGatewayStore();
+  const { status, doToggleProvider } = useGatewayStore();
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const providers = status?.providers ?? [];
 
-  const handleToggle = async (providerId: string, currentEnabled: boolean) => {
+  const handleToggle = async (providerId: string, isEnabled: boolean) => {
     setTogglingId(providerId);
-    // Simulate API call delay
-    await new Promise((r) => setTimeout(r, 600));
+    const action = isEnabled ? "disable" : "enable";
+    await doToggleProvider(providerId, action);
     setTogglingId(null);
   };
 
@@ -49,7 +46,10 @@ export function ProvidersTab() {
       <div className="space-y-4">
         {providers.map((provider, i) => {
           const isEnabled = provider.status === "healthy" || provider.consecutive_failures < 5;
-          const successRate = provider.total_requests > 0 ? ((provider.total_successes / provider.total_requests) * 100).toFixed(1) : "0";
+          const successRate =
+            provider.total_requests > 0
+              ? ((provider.total_successes / provider.total_requests) * 100).toFixed(1)
+              : "0";
           const isToggling = togglingId === provider.provider_id;
 
           return (
@@ -96,7 +96,9 @@ export function ProvidersTab() {
                           )}
                           {provider.status}
                         </span>
-                        <span className="text-[10px] text-zinc-600">Priority 1</span>
+                        <span className="text-[10px] text-zinc-600">
+                          Priority {i + 1}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -117,7 +119,11 @@ export function ProvidersTab() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Consecutive Fails</p>
-                      <p className={`text-lg font-bold ${provider.consecutive_failures > 0 ? "text-amber-400" : "text-zinc-400"}`}>
+                      <p
+                        className={`text-lg font-bold ${
+                          provider.consecutive_failures > 0 ? "text-amber-400" : "text-zinc-400"
+                        }`}
+                      >
                         {provider.consecutive_failures}
                       </p>
                     </div>
@@ -139,7 +145,8 @@ export function ProvidersTab() {
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
                       <Clock className="w-4 h-4 text-amber-400 shrink-0" />
                       <p className="text-xs text-amber-400">
-                        In cooldown — auto-recovers in ~{Math.max(0, Math.round(provider.cooldown_until - Date.now() / 1000))}s
+                        In cooldown — auto-recovers in ~
+                        {Math.max(0, Math.round(provider.cooldown_until - Date.now() / 1000))}s
                       </p>
                     </div>
                   )}
@@ -186,10 +193,18 @@ export function ProvidersTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
-                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Provider</th>
-                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Base URL</th>
-                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">API Key</th>
-                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Priority</th>
+                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                  Provider
+                </th>
+                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                  Base URL
+                </th>
+                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                  API Key
+                </th>
+                <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                  Priority
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -197,19 +212,25 @@ export function ProvidersTab() {
                 <td className="px-3 py-2.5 text-xs text-white font-medium">openai-primary</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">https://api.openai.com/v1</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">sk-***...xxxx</td>
-                <td className="px-3 py-2.5"><span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">1</span></td>
+                <td className="px-3 py-2.5">
+                  <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">1</span>
+                </td>
               </tr>
               <tr className="border-b border-white/[0.03]">
                 <td className="px-3 py-2.5 text-xs text-white font-medium">groq-backup</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">https://api.groq.com/openai/v1</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">gsk-***...xxxx</td>
-                <td className="px-3 py-2.5"><span className="text-xs bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-full">2</span></td>
+                <td className="px-3 py-2.5">
+                  <span className="text-xs bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-full">2</span>
+                </td>
               </tr>
               <tr>
                 <td className="px-3 py-2.5 text-xs text-white font-medium">together-backup</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">https://api.together.xyz/v1</td>
                 <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">together-***...xxxx</td>
-                <td className="px-3 py-2.5"><span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">3</span></td>
+                <td className="px-3 py-2.5">
+                  <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">3</span>
+                </td>
               </tr>
             </tbody>
           </table>
