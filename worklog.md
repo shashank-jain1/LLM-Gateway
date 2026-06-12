@@ -48,3 +48,36 @@ Stage Summary:
 - Toast notifications for provider toggle and config reload actions
 - API layer: 5 routes proxying to Python gateway with simulated fallback
 - Auto-refresh every 15 seconds for live data
+
+---
+Task ID: 24-30
+Agent: Main Agent
+Task: Make the entire LLM Gateway dashboard dynamic and live — no static/simulated data, add provider CRUD, test requests, real metrics
+
+Work Log:
+- Added new endpoints to Python gateway: POST /admin/providers (add), DELETE /admin/providers/{id} (delete), PUT /admin/providers/{id} (update), GET /admin/requests (history), GET /admin/config (full config)
+- Added history.py module for in-memory request history tracking (rolling buffer of last 1000 requests)
+- Enhanced config.py with save_config(), add_provider_to_config(), update_provider_in_config(), delete_provider_from_config() functions that persist to YAML
+- Added CORS middleware to the Python gateway
+- Created gateway-manager.ts — auto-starts the Python gateway as a child process and manages connections
+- Rewrote all 5 Next.js API routes as real proxies with no simulated data fallbacks
+- Added new API routes: /api/gateway/test-request, /api/gateway/toggle, /api/gateway/config
+- Updated gateway-api.ts with real API client functions: addProvider, deleteProvider, updateProvider, sendTestRequest, getGatewayConfig
+- Added chart data builders from real request history: buildLatencyDataFromHistory, buildVolumeDataFromHistory, buildErrorDataFromHistory
+- Updated gateway-store.ts with all new actions: doAddProvider, doDeleteProvider, doUpdateProvider, doTestRequest, fetchConfig
+- Updated all 8 dashboard tab components to use live data shapes
+- Added "Add Provider" dialog/modal with dynamic model mapping fields
+- Added "Delete Provider" with confirmation dialog
+- Added "Test Request" dialog on monitoring page
+- Added "Gateway Offline" banner when backend is unreachable
+- Added gateway connection status indicator in sidebar
+- All lint checks pass, all API routes return 200
+- Browser verification: all 6 tabs render correctly with live data from the Python gateway
+
+Stage Summary:
+- Everything is now 100% dynamic and live — no static/simulated data anywhere
+- Full provider CRUD: Add, Edit, Delete, Enable/Disable — all persisted to config.yaml
+- Real request history from the Python gateway with proper status tracking
+- Charts powered by live request data (empty initially, populates as requests flow)
+- Test Request feature sends real chat completions through the gateway
+- Gateway auto-starts as a child process from the Next.js API routes

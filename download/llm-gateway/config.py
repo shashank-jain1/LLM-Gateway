@@ -2,6 +2,7 @@
 Configuration loader and Pydantic models for the LLM Gateway.
 
 Reads config.yaml, validates with Pydantic, and supports hot-reload.
+Also supports writing config back to disk (for admin add/edit provider).
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 import os
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -90,14 +91,7 @@ def _resolve_path() -> Path:
 
 
 def load_config(path: Optional[str] = None) -> AppConfig:
-    """Load and validate the YAML config file.
-
-    Parameters
-    ----------
-    path:
-        Explicit path to the config file. If *None*, uses the
-        ``LLM_GATEWAY_CONFIG`` env var or falls back to ``config.yaml``.
-    """
+    """Load and validate the YAML config file."""
     global _config_instance, _config_path
     if path:
         _config_path = path
@@ -126,3 +120,57 @@ def set_config(cfg: AppConfig) -> None:
     """Replace the in-memory config (used by admin reload)."""
     global _config_instance
     _config_instance = cfg
+
+
+def save_config() -> None:
+    """Write the current in-memory config back to the YAML file on disk."""
+    cfg = get_config()
+    p = _resolve_path()
+
+    # Convert to a clean dict for YAML serialization
+    data: Dict[str, Any] = {
+        "gateway": cfg.gateway.model_dump(exclude_none=True),
+        "providers": [p.model_dump(exclude_none=True) for p in cfg.providers],
+    }
+
+    with open(p, "w") as fh:
+        yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
+
+
+def add_provider_to_config(provider: ProviderConfig) -> None:
+    """Add a new provider to the in-memory config and save to disk."""
+    cfg = get_config()
+    # Check for duplicate ID
+    for existing in cfg.providers:
+        if existing.id == provider.id:
+            raise ValueError(f"Provider with id '{provider.id}' already exists")
+    cfg.providers.append(provider)
+    set_config(cfg)
+    save_config()
+
+
+def update_provider_in_config(provider_id: str, updates: Dict[str, Any]) -> None:
+    """Update an existing provider's fields in the in-memory config and save to disk."""
+    cfg = get_config()
+    for i, p in enumerate(cfg.providers):
+        if p.id == provider_id:
+            updated_data = p.model_dump()
+            updated_data.update(updates)
+            if "id" in updates and updates["id"] != provider_id:
+                raise ValueError("Cannot change provider id")
+            cfg.providers[i] = ProviderConfig(**updated_data)
+            set_config(cfg)
+            save_config()
+            return
+    raise ValueError(f"Provider '{provider_id}' not found")
+
+
+def delete_provider_from_config(provider_id: str) -> None:
+    """Remove a provider from the in-memory config and save to disk."""
+    cfg = get_config()
+    original_len = len(cfg.providers)
+    cfg.providers = [p for p in cfg.providers if p.id != provider_id]
+    if len(cfg.providers) == original_len:
+        raise ValueError(f"Provider '{provider_id}' not found")
+    set_config(cfg)
+    save_config()

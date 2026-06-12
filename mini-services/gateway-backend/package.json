@@ -1,0 +1,6 @@
+{
+  "name": "gateway-backend",
+  "scripts": {
+    "dev": "python3 index.py"
+  }
+}

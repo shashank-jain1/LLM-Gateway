@@ -2,7 +2,7 @@
 
 import { useGatewayStore } from "@/lib/gateway-store";
 import { motion } from "framer-motion";
-import { ScrollText, Search, Filter, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { ScrollText, Search, CheckCircle2, AlertTriangle, XCircle, RefreshCw } from "lucide-react";
 import { useState, useMemo } from "react";
 
 export function LogsTab() {
@@ -15,8 +15,8 @@ export function LogsTab() {
       const matchesSearch =
         !searchQuery ||
         req.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        req.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        req.provider.toLowerCase().includes(searchQuery.toLowerCase());
+        req.virtual_model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (req.provider_id ?? "").toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === "all" || req.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -47,6 +47,24 @@ export function LogsTab() {
         {status}
       </span>
     );
+  };
+
+  const formatTimestamp = (ts: number) => {
+    const date = new Date(ts * 1000);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  };
+
+  const formatDate = (ts: number) => {
+    const date = new Date(ts * 1000);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
   };
 
   return (
@@ -100,21 +118,15 @@ export function LogsTab() {
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Status</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Request ID</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Time</th>
-                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Model</th>
+                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Virtual Model</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Provider</th>
+                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">HTTP Status</th>
                 <th className="text-right px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Latency</th>
-                <th className="text-right px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Tokens</th>
+                <th className="text-right px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Attempts</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((req, i) => {
-                const time = new Date(req.timestamp);
-                const timeStr = time.toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                  hour12: false,
-                });
                 return (
                   <motion.tr
                     key={req.id}
@@ -125,9 +137,25 @@ export function LogsTab() {
                   >
                     <td className="px-4 py-3">{statusBadge(req.status)}</td>
                     <td className="px-4 py-3 text-xs text-zinc-400 font-mono">{req.id}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-500 font-mono">{timeStr}</td>
-                    <td className="px-4 py-3 text-xs text-white font-mono">{req.model}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-400">{req.provider}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">
+                      <div className="font-mono">{formatTimestamp(req.timestamp)}</div>
+                      <div className="text-[10px] text-zinc-700">{formatDate(req.timestamp)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-white font-mono">{req.virtual_model}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-400">{req.provider_id ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className={`font-mono ${
+                        req.status_code >= 200 && req.status_code < 300
+                          ? "text-emerald-400"
+                          : req.status_code >= 400 && req.status_code < 500
+                          ? "text-amber-400"
+                          : req.status_code >= 500
+                          ? "text-rose-400"
+                          : "text-zinc-500"
+                      }`}>
+                        {req.status_code}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-xs text-right font-mono">
                       <span
                         className={
@@ -141,8 +169,15 @@ export function LogsTab() {
                         {Math.round(req.latency_ms)}ms
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-right text-zinc-500">
-                      {req.tokens_used ? req.tokens_used.toLocaleString() : "—"}
+                    <td className="px-4 py-3 text-xs text-right">
+                      <span className={`inline-flex items-center gap-1 ${
+                        req.attempt_count > 1
+                          ? "text-amber-400"
+                          : "text-zinc-500"
+                      }`}>
+                        {req.attempt_count > 1 && <RefreshCw className="w-3 h-3" />}
+                        {req.attempt_count}
+                      </span>
                     </td>
                   </motion.tr>
                 );

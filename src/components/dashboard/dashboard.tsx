@@ -11,9 +11,10 @@ import { LogsTab } from "@/components/dashboard/logs-tab";
 import { SettingsTab } from "@/components/dashboard/settings-tab";
 import { ToastContainer } from "@/components/dashboard/toast-container";
 import { motion, AnimatePresence } from "framer-motion";
+import { WifiOff, RefreshCw } from "lucide-react";
 
 export function Dashboard() {
-  const { activeTab, refreshAll, isLoading } = useGatewayStore();
+  const { activeTab, refreshAll, isLoading, isGatewayConnected } = useGatewayStore();
 
   useEffect(() => {
     refreshAll();
@@ -56,10 +57,17 @@ export function Dashboard() {
               <p className="text-sm text-zinc-500 mt-1">Multi-provider API management & monitoring</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs font-medium text-emerald-400">Gateway Online</span>
-              </div>
+              {isGatewayConnected ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-medium text-emerald-400">Gateway Online</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20">
+                  <div className="h-2 w-2 rounded-full bg-rose-500" />
+                  <span className="text-xs font-medium text-rose-400">Gateway Offline</span>
+                </div>
+              )}
               <button
                 onClick={refreshAll}
                 disabled={isLoading}
@@ -78,6 +86,36 @@ export function Dashboard() {
               </button>
             </div>
           </div>
+
+          {/* Gateway Offline Banner */}
+          <AnimatePresence>
+            {!isGatewayConnected && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: "auto", marginBottom: 24 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-3 px-5 py-4 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                  <WifiOff className="w-5 h-5 text-rose-400 shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-rose-300">Gateway Offline</h3>
+                    <p className="text-xs text-rose-400/70 mt-0.5">
+                      Cannot connect to the Python LLM Gateway backend. Data shown may be stale. Check that the gateway service is running.
+                    </p>
+                  </div>
+                  <button
+                    onClick={refreshAll}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/20 text-rose-300 border border-rose-500/20 hover:bg-rose-500/30 transition-all duration-200 disabled:opacity-50 shrink-0"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                    Retry
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Tab Content */}
           <AnimatePresence mode="wait">

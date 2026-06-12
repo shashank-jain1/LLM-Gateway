@@ -5,14 +5,20 @@ import {
   getGatewayStatus,
   getRequestHistory,
   getModels,
+  getGatewayConfig,
   reloadConfig,
   toggleProvider,
+  addProvider,
+  deleteProvider,
+  updateProvider,
+  sendTestRequest,
+  buildLatencyDataFromHistory,
+  buildVolumeDataFromHistory,
+  buildErrorDataFromHistory,
   type GatewayStatus,
   type ModelsResponse,
   type RequestHistoryEntry,
-  generateLatencyTimeline,
-  generateRequestVolume,
-  generateErrorDistribution,
+  type GatewayConfig,
 } from "@/lib/gateway-api";
 
 interface GatewayStore {
@@ -20,12 +26,14 @@ interface GatewayStore {
   status: GatewayStatus | null;
   models: ModelsResponse | null;
   requestHistory: RequestHistoryEntry[];
-  latencyData: ReturnType<typeof generateLatencyTimeline>;
-  volumeData: ReturnType<typeof generateRequestVolume>;
-  errorData: ReturnType<typeof generateErrorDistribution>;
+  config: GatewayConfig | null;
+  latencyData: any[];
+  volumeData: any[];
+  errorData: any[];
 
   // UI State
   isLoading: boolean;
+  isGatewayConnected: boolean;
   activeTab: string;
   sidebarCollapsed: boolean;
   toasts: Array<{ id: string; message: string; type: "success" | "error" }>;
@@ -34,11 +42,16 @@ interface GatewayStore {
   fetchStatus: () => Promise<void>;
   fetchModels: () => Promise<void>;
   fetchRequestHistory: () => Promise<void>;
+  fetchConfig: () => Promise<void>;
   refreshAll: () => Promise<void>;
   setActiveTab: (tab: string) => void;
   toggleSidebar: () => void;
   doReloadConfig: () => Promise<boolean>;
   doToggleProvider: (providerId: string, action: "enable" | "disable") => Promise<boolean>;
+  doAddProvider: (provider: { id: string; enabled: boolean; priority: number; base_url: string; api_key: string; models: Record<string, string> }) => Promise<boolean>;
+  doDeleteProvider: (providerId: string) => Promise<boolean>;
+  doUpdateProvider: (providerId: string, updates: Record<string, any>) => Promise<boolean>;
+  doTestRequest: (model: string, messages: Array<{ role: string; content: string }>) => Promise<any>;
   addToast: (message: string, type?: "success" | "error") => void;
   removeToast: (id: string) => void;
 }
@@ -49,10 +62,12 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
   status: null,
   models: null,
   requestHistory: [],
-  latencyData: generateLatencyTimeline(),
-  volumeData: generateRequestVolume(),
-  errorData: generateErrorDistribution(),
+  config: null,
+  latencyData: [],
+  volumeData: [],
+  errorData: [],
   isLoading: false,
+  isGatewayConnected: false,
   activeTab: "overview",
   sidebarCollapsed: false,
   toasts: [],
@@ -60,16 +75,17 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
   fetchStatus: async () => {
     try {
       const status = await getGatewayStatus();
-      set({ status });
+      set({ status, isGatewayConnected: true });
     } catch (e) {
       console.error("Failed to fetch gateway status:", e);
+      set({ isGatewayConnected: false });
     }
   },
 
   fetchModels: async () => {
     try {
       const models = await getModels();
-      set({ models });
+      set({ models, isGatewayConnected: true });
     } catch (e) {
       console.error("Failed to fetch models:", e);
     }
@@ -77,10 +93,24 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
 
   fetchRequestHistory: async () => {
     try {
-      const requestHistory = await getRequestHistory();
-      set({ requestHistory });
+      const requestHistory = await getRequestHistory(200);
+      set({
+        requestHistory,
+        latencyData: buildLatencyDataFromHistory(requestHistory),
+        volumeData: buildVolumeDataFromHistory(requestHistory),
+        errorData: buildErrorDataFromHistory(requestHistory),
+      });
     } catch (e) {
       console.error("Failed to fetch request history:", e);
+    }
+  },
+
+  fetchConfig: async () => {
+    try {
+      const config = await getGatewayConfig();
+      set({ config });
+    } catch (e) {
+      console.error("Failed to fetch gateway config:", e);
     }
   },
 
@@ -91,12 +121,8 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
         get().fetchStatus(),
         get().fetchModels(),
         get().fetchRequestHistory(),
+        get().fetchConfig(),
       ]);
-      set({
-        latencyData: generateLatencyTimeline(),
-        volumeData: generateRequestVolume(),
-        errorData: generateErrorDistribution(),
-      });
     } finally {
       set({ isLoading: false });
     }
@@ -127,7 +153,7 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
       const result = await toggleProvider(providerId, action);
       if (result.status === "ok") {
         get().addToast(`Provider ${providerId} ${action}d`, "success");
-        await get().fetchStatus();
+        await get().refreshAll();
         return true;
       } else {
         get().addToast(result.message || `Failed to ${action} provider`, "error");
@@ -136,6 +162,68 @@ export const useGatewayStore = create<GatewayStore>((set, get) => ({
     } catch {
       get().addToast("Gateway unreachable", "error");
       return false;
+    }
+  },
+
+  doAddProvider: async (provider) => {
+    try {
+      const result = await addProvider(provider);
+      if (result.status === "ok") {
+        get().addToast(`Provider '${provider.id}' added`, "success");
+        await get().refreshAll();
+        return true;
+      } else {
+        get().addToast(result.message || "Failed to add provider", "error");
+        return false;
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return false;
+    }
+  },
+
+  doDeleteProvider: async (providerId) => {
+    try {
+      const result = await deleteProvider(providerId);
+      if (result.status === "ok") {
+        get().addToast(`Provider '${providerId}' deleted`, "success");
+        await get().refreshAll();
+        return true;
+      } else {
+        get().addToast(result.message || "Failed to delete provider", "error");
+        return false;
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return false;
+    }
+  },
+
+  doUpdateProvider: async (providerId, updates) => {
+    try {
+      const result = await updateProvider(providerId, updates);
+      if (result.status === "ok") {
+        get().addToast(`Provider '${providerId}' updated`, "success");
+        await get().refreshAll();
+        return true;
+      } else {
+        get().addToast(result.message || "Failed to update provider", "error");
+        return false;
+      }
+    } catch {
+      get().addToast("Gateway unreachable", "error");
+      return false;
+    }
+  },
+
+  doTestRequest: async (model, messages) => {
+    try {
+      const result = await sendTestRequest({ model, messages, stream: false });
+      await get().refreshAll(); // Refresh to get updated request history
+      return result;
+    } catch {
+      get().addToast("Test request failed — gateway unreachable", "error");
+      return null;
     }
   },
 

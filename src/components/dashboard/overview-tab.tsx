@@ -11,6 +11,8 @@ import {
   ArrowDownRight,
   TrendingUp,
   BarChart3,
+  Globe,
+  Hash,
 } from "lucide-react";
 
 function StatCard({
@@ -91,13 +93,13 @@ function StatCard({
 }
 
 export function OverviewTab() {
-  const { status, models, requestHistory } = useGatewayStore();
+  const { status, requestHistory } = useGatewayStore();
 
-  const totalRequests = status?.providers.reduce((sum, p) => sum + p.total_requests, 0) ?? 0;
+  const totalRequests = status?.total_requests ?? 0;
   const totalSuccesses = status?.providers.reduce((sum, p) => sum + p.total_successes, 0) ?? 0;
   const totalFailures = status?.providers.reduce((sum, p) => sum + p.total_failures, 0) ?? 0;
   const successRate = totalRequests > 0 ? ((totalSuccesses / totalRequests) * 100).toFixed(1) : "0";
-  const healthyProviders = status?.providers.filter((p) => p.status === "healthy").length ?? 0;
+  const enabledProviders = status?.providers.filter((p) => p.enabled).length ?? 0;
   const totalProviders = status?.providers.length ?? 0;
 
   return (
@@ -107,10 +109,8 @@ export function OverviewTab() {
         <StatCard
           title="Total Requests"
           value={totalRequests.toLocaleString()}
-          subtitle="all time"
+          subtitle="gateway total"
           icon={Activity}
-          trend="12.5%"
-          trendUp={true}
           color="emerald"
           delay={0}
         />
@@ -119,8 +119,6 @@ export function OverviewTab() {
           value={`${successRate}%`}
           subtitle="across all providers"
           icon={TrendingUp}
-          trend="0.3%"
-          trendUp={true}
           color="cyan"
           delay={0.05}
         />
@@ -133,16 +131,57 @@ export function OverviewTab() {
           delay={0.1}
         />
         <StatCard
-          title="Active Providers"
-          value={`${healthyProviders}/${totalProviders}`}
-          subtitle={`${totalProviders - healthyProviders} in cooldown`}
+          title="Enabled Providers"
+          value={`${enabledProviders}/${totalProviders}`}
+          subtitle={`${totalProviders - enabledProviders} disabled`}
           icon={Server}
-          color={healthyProviders === totalProviders ? "emerald" : "rose"}
+          color={enabledProviders === totalProviders && totalProviders > 0 ? "emerald" : "rose"}
           delay={0.15}
         />
       </div>
 
-      {/* Provider Status Cards */}
+      {/* Gateway Config */}
+      {status?.gateway && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, duration: 0.4 }}
+          className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
+        >
+          <h3 className="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
+            <Globe className="w-4 h-4" />
+            Gateway Configuration
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Host</p>
+              <p className="text-sm font-semibold text-white font-mono">{status.gateway.host}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Port</p>
+              <p className="text-sm font-semibold text-white font-mono">{status.gateway.port}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Log Level</p>
+              <p className="text-sm font-semibold text-cyan-400 font-mono">{status.gateway.log_level}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Default Cooldown</p>
+              <p className="text-sm font-semibold text-white">{status.gateway.default_cooldown_seconds}s</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Max Cooldown</p>
+              <p className="text-sm font-semibold text-white">{status.gateway.max_cooldown_seconds}s</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Request Timeout</p>
+              <p className="text-sm font-semibold text-white">{status.gateway.request_timeout_seconds}s</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Provider Health Cards */}
       <div>
         <h3 className="text-sm font-medium text-zinc-400 mb-3">Provider Health</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -153,30 +192,64 @@ export function OverviewTab() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + i * 0.05, duration: 0.4 }}
               className={`rounded-xl bg-[#11111a] border p-5 hover:border-white/[0.12] transition-colors duration-300 ${
-                provider.status === "healthy"
-                  ? "border-emerald-500/20"
-                  : "border-amber-500/30"
+                provider.enabled
+                  ? provider.status === "healthy"
+                    ? "border-emerald-500/20"
+                    : "border-amber-500/30"
+                  : "border-zinc-700/30 opacity-60"
               }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-2.5 h-2.5 rounded-full ${
-                      provider.status === "healthy" ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
+                      !provider.enabled
+                        ? "bg-zinc-600"
+                        : provider.status === "healthy"
+                        ? "bg-emerald-500"
+                        : "bg-amber-500 animate-pulse"
                     }`}
                   />
                   <span className="text-sm font-medium text-white">{provider.provider_id}</span>
                 </div>
-                <span
-                  className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
-                    provider.status === "healthy"
-                      ? "bg-emerald-500/10 text-emerald-400"
-                      : "bg-amber-500/10 text-amber-400"
-                  }`}
-                >
-                  {provider.status}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-600 flex items-center gap-0.5">
+                    <Hash className="w-2.5 h-2.5" />
+                    P{provider.priority}
+                  </span>
+                  <span
+                    className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+                      !provider.enabled
+                        ? "bg-zinc-500/10 text-zinc-500"
+                        : provider.status === "healthy"
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "bg-amber-500/10 text-amber-400"
+                    }`}
+                  >
+                    {!provider.enabled ? "disabled" : provider.status}
+                  </span>
+                </div>
               </div>
+
+              {/* Base URL */}
+              <div className="flex items-center gap-1.5 mb-3 text-[11px] text-zinc-500 truncate">
+                <Globe className="w-3 h-3 shrink-0" />
+                <span className="font-mono truncate">{provider.base_url}</span>
+              </div>
+
+              {/* Models */}
+              {provider.models && Object.keys(provider.models).length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {Object.entries(provider.models).map(([virtual, actual]) => (
+                    <span
+                      key={virtual}
+                      className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/10 font-mono"
+                    >
+                      {virtual}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-3 mt-4">
                 <div>
@@ -203,7 +276,9 @@ export function OverviewTab() {
                     }}
                     transition={{ delay: 0.5 + i * 0.1, duration: 0.8, ease: "easeOut" }}
                     className={`h-full rounded-full ${
-                      provider.status === "healthy"
+                      !provider.enabled
+                        ? "bg-zinc-600"
+                        : provider.status === "healthy"
                         ? "bg-gradient-to-r from-emerald-500 to-cyan-500"
                         : "bg-gradient-to-r from-amber-500 to-orange-500"
                     }`}
@@ -234,7 +309,7 @@ export function OverviewTab() {
               <thead>
                 <tr className="border-b border-white/[0.06]">
                   <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Request</th>
-                  <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Model</th>
+                  <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Virtual Model</th>
                   <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Provider</th>
                   <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Status</th>
                   <th className="text-right px-4 py-3 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Latency</th>
@@ -244,8 +319,8 @@ export function OverviewTab() {
                 {requestHistory.slice(0, 8).map((req) => (
                   <tr key={req.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 py-2.5 text-xs text-zinc-400 font-mono">{req.id}</td>
-                    <td className="px-4 py-2.5 text-xs text-white">{req.model}</td>
-                    <td className="px-4 py-2.5 text-xs text-zinc-400">{req.provider}</td>
+                    <td className="px-4 py-2.5 text-xs text-white font-mono">{req.virtual_model}</td>
+                    <td className="px-4 py-2.5 text-xs text-zinc-400">{req.provider_id ?? "—"}</td>
                     <td className="px-4 py-2.5">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
@@ -267,6 +342,13 @@ export function OverviewTab() {
               </tbody>
             </table>
           </div>
+          {requestHistory.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-zinc-600">
+              <Activity className="w-8 h-8 mb-2" />
+              <p className="text-sm">No requests yet</p>
+              <p className="text-xs text-zinc-700">Requests will appear here once they are made through the gateway</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

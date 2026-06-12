@@ -1,36 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GATEWAY_BASE_URL, gatewayHeaders, USE_SIMULATED_DATA } from "@/lib/gateway-config";
+import { gatewayFetch } from "@/lib/gateway-manager";
 
-// POST /api/gateway/providers?action=enable|disable&provider_id=xxx
-export async function POST(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const action = searchParams.get("action"); // "enable" or "disable"
-  const providerId = searchParams.get("provider_id");
-
-  if (!action || !providerId) {
-    return NextResponse.json({ error: "Missing action or provider_id" }, { status: 400 });
-  }
-
-  if (!["enable", "disable"].includes(action)) {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  }
-
-  if (USE_SIMULATED_DATA) {
-    return NextResponse.json({
-      status: "ok",
-      message: `Provider '${providerId}' ${action}d`,
-    });
-  }
-
+// GET: list request history
+export async function GET(req: NextRequest) {
+  const limit = req.nextUrl.searchParams.get("limit") || "100";
   try {
-    const res = await fetch(`${GATEWAY_BASE_URL}/admin/providers/${providerId}/${action}`, {
+    const res = await gatewayFetch(`/admin/requests?limit=${limit}`);
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: "Gateway unreachable", detail: err.message },
+      { status: 502 }
+    );
+  }
+}
+
+// POST: add a new provider
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const res = await gatewayFetch("/admin/providers", {
       method: "POST",
-      headers: gatewayHeaders(),
-      signal: AbortSignal.timeout(5000),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch {
+  } catch (err: any) {
+    return NextResponse.json(
+      { status: "error", message: "Gateway unreachable" },
+      { status: 502 }
+    );
+  }
+}
+
+// DELETE: remove a provider
+export async function DELETE(req: NextRequest) {
+  const providerId = req.nextUrl.searchParams.get("provider_id");
+  if (!providerId) {
+    return NextResponse.json(
+      { status: "error", message: "Missing provider_id" },
+      { status: 400 }
+    );
+  }
+  try {
+    const res = await gatewayFetch(`/admin/providers/${encodeURIComponent(providerId)}`, {
+      method: "DELETE",
+    });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err: any) {
+    return NextResponse.json(
+      { status: "error", message: "Gateway unreachable" },
+      { status: 502 }
+    );
+  }
+}
+
+// PUT: update a provider
+export async function PUT(req: NextRequest) {
+  const providerId = req.nextUrl.searchParams.get("provider_id");
+  if (!providerId) {
+    return NextResponse.json(
+      { status: "error", message: "Missing provider_id" },
+      { status: 400 }
+    );
+  }
+  try {
+    const body = await req.json();
+    const res = await gatewayFetch(`/admin/providers/${encodeURIComponent(providerId)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err: any) {
     return NextResponse.json(
       { status: "error", message: "Gateway unreachable" },
       { status: 502 }

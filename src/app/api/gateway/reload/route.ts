@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
-import { GATEWAY_BASE_URL, gatewayHeaders, USE_SIMULATED_DATA } from "@/lib/gateway-config";
+import { gatewayFetch } from "@/lib/gateway-manager";
 
 export async function POST() {
-  if (USE_SIMULATED_DATA) {
-    return NextResponse.json({ status: "ok", message: "Config reloaded successfully" });
-  }
-
   try {
-    const res = await fetch(`${GATEWAY_BASE_URL}/admin/reload-config`, {
-      method: "POST",
-      headers: gatewayHeaders(),
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await gatewayFetch("/admin/reload-config", { method: "POST" });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch {
+  } catch (err: any) {
     return NextResponse.json(
       { status: "error", message: "Gateway unreachable" },
       { status: 502 }

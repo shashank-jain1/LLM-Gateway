@@ -11,6 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 const navItems = [
@@ -23,9 +25,10 @@ const navItems = [
 ];
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, sidebarCollapsed, toggleSidebar, status } = useGatewayStore();
+  const { activeTab, setActiveTab, sidebarCollapsed, toggleSidebar, status, isGatewayConnected } = useGatewayStore();
 
-  const healthyCount = status?.providers.filter((p) => p.status === "healthy").length ?? 0;
+  const enabledProviders = status?.providers.filter((p) => p.enabled).length ?? 0;
+  const healthyCount = status?.providers.filter((p) => p.enabled && p.status === "healthy").length ?? 0;
   const totalProviders = status?.providers.length ?? 0;
 
   return (
@@ -69,9 +72,29 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Provider Status Summary */}
+      {/* Connection Status */}
       {!sidebarCollapsed && (
         <div className="p-4 border-t border-white/[0.06]">
+          <div className="rounded-lg bg-white/[0.02] border border-white/[0.06] p-3">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2">Connection</p>
+            <div className="flex items-center gap-2">
+              {isGatewayConnected ? (
+                <Wifi className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-rose-400" />
+              )}
+              <span className={`text-xs font-medium ${isGatewayConnected ? "text-emerald-400" : "text-rose-400"}`}>
+                {isGatewayConnected ? "Online" : "Offline"}
+              </span>
+              <div className={`ml-auto h-2 w-2 rounded-full ${isGatewayConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provider Status Summary */}
+      {!sidebarCollapsed && (
+        <div className="px-4 pb-4">
           <div className="rounded-lg bg-white/[0.02] border border-white/[0.06] p-3">
             <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2">Providers</p>
             <div className="flex items-center gap-2">
@@ -80,9 +103,13 @@ export function Sidebar() {
                   <div
                     key={p.provider_id}
                     className={`w-5 h-5 rounded-full border-2 border-[#0d0d14] ${
-                      p.status === "healthy" ? "bg-emerald-500" : "bg-amber-500"
+                      !p.enabled
+                        ? "bg-zinc-600"
+                        : p.status === "healthy"
+                        ? "bg-emerald-500"
+                        : "bg-amber-500"
                     }`}
-                    title={`${p.provider_id}: ${p.status}`}
+                    title={`${p.provider_id}: ${!p.enabled ? "disabled" : p.status}`}
                   />
                 ))}
               </div>

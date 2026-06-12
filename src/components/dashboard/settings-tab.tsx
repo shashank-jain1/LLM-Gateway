@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check } from "lucide-react";
+import { Settings, RefreshCw, Shield, Clock, Zap, Save, Eye, EyeOff, Copy, Check, Wifi, WifiOff } from "lucide-react";
 import { useGatewayStore } from "@/lib/gateway-store";
 
 export function SettingsTab() {
-  const { doReloadConfig } = useGatewayStore();
+  const { doReloadConfig, config, isGatewayConnected } = useGatewayStore();
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
@@ -28,8 +28,10 @@ export function SettingsTab() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const gatewayUrl = "http://localhost:8000/v1/chat/completions";
-  const exampleKey = "sk-gateway-mysecretkey123";
+  const gateway = config?.gateway;
+  const gatewayUrl = `http://${gateway?.host ?? "0.0.0.0"}:${gateway?.port ?? 8000}/v1/chat/completions`;
+  const exampleKey = gateway?.api_keys?.[0] ? `${gateway.api_keys[0].slice(0, 6)}***...${gateway.api_keys[0].slice(-4)}` : "sk-***...xxxx";
+  const fullKey = gateway?.api_keys?.[0] ?? "";
 
   return (
     <div className="space-y-6">
@@ -39,12 +41,49 @@ export function SettingsTab() {
         <p className="text-sm text-zinc-500 mt-0.5">Gateway configuration and quick actions</p>
       </div>
 
+      {/* Connection Status */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className={`rounded-xl border p-5 ${
+          isGatewayConnected
+            ? "bg-emerald-500/5 border-emerald-500/20"
+            : "bg-rose-500/5 border-rose-500/20"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          {isGatewayConnected ? (
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+              <Wifi className="w-5 h-5 text-emerald-400" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
+              <WifiOff className="w-5 h-5 text-rose-400" />
+            </div>
+          )}
+          <div>
+            <h3 className="text-sm font-semibold text-white">
+              Gateway {isGatewayConnected ? "Connected" : "Disconnected"}
+            </h3>
+            <p className="text-xs text-zinc-500">
+              {isGatewayConnected
+                ? "The Python LLM Gateway backend is reachable and responding"
+                : "Cannot reach the Python LLM Gateway backend. Check that it is running."}
+            </p>
+          </div>
+          <div className="ml-auto">
+            <div className={`h-3 w-3 rounded-full ${isGatewayConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+          </div>
+        </div>
+      </motion.div>
+
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ delay: 0.1, duration: 0.4 }}
           className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
         >
           <div className="flex items-center gap-3 mb-4">
@@ -87,7 +126,7 @@ export function SettingsTab() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
+          transition={{ delay: 0.15, duration: 0.4 }}
           className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
         >
           <div className="flex items-center gap-3 mb-4">
@@ -101,7 +140,7 @@ export function SettingsTab() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] font-mono text-sm text-zinc-300">
-              <span className="truncate">{showApiKey ? exampleKey : "sk-gate\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}</span>
+              <span className="truncate">{showApiKey ? (fullKey || exampleKey) : exampleKey}</span>
             </div>
             <button
               onClick={() => setShowApiKey(!showApiKey)}
@@ -114,7 +153,7 @@ export function SettingsTab() {
               )}
             </button>
             <button
-              onClick={() => handleCopy(exampleKey)}
+              onClick={() => handleCopy(fullKey || exampleKey)}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
             >
               {copied ? (
@@ -124,6 +163,11 @@ export function SettingsTab() {
               )}
             </button>
           </div>
+          {gateway?.api_keys && gateway.api_keys.length > 1 && (
+            <p className="text-[10px] text-zinc-600 mt-2">
+              {gateway.api_keys.length} API keys configured (showing first)
+            </p>
+          )}
         </motion.div>
       </div>
 
@@ -144,16 +188,18 @@ export function SettingsTab() {
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Port</label>
               <input
                 type="text"
-                defaultValue="8000"
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30"
+                value={gateway?.port ?? "—"}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
               />
             </div>
             <div>
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Host</label>
               <input
                 type="text"
-                defaultValue="0.0.0.0"
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30"
+                value={gateway?.host ?? "—"}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
               />
             </div>
           </div>
@@ -164,8 +210,9 @@ export function SettingsTab() {
               </label>
               <input
                 type="text"
-                defaultValue="30"
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30"
+                value={gateway?.default_cooldown_seconds ?? "—"}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
               />
             </div>
             <div>
@@ -174,8 +221,9 @@ export function SettingsTab() {
               </label>
               <input
                 type="text"
-                defaultValue="600"
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30"
+                value={gateway?.max_cooldown_seconds ?? "—"}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
               />
             </div>
             <div>
@@ -184,17 +232,82 @@ export function SettingsTab() {
               </label>
               <input
                 type="text"
-                defaultValue="60"
-                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none focus:border-emerald-500/30"
+                value={gateway?.request_timeout_seconds ?? "—"}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
               />
             </div>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all duration-200">
-            <Save className="w-4 h-4" />
-            Save Changes
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Log Level</label>
+              <input
+                type="text"
+                value={gateway?.log_level ?? "—"}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-cyan-400 font-mono focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Providers Configured</label>
+              <input
+                type="text"
+                value={config?.providers?.length ?? 0}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none"
+              />
+            </div>
+          </div>
+          <p className="text-[10px] text-zinc-600 italic">
+            Configuration is loaded from the live gateway. Edit config.yaml and click &quot;Reload Config&quot; to apply changes.
+          </p>
         </div>
       </motion.div>
+
+      {/* Configured Providers */}
+      {config?.providers && config.providers.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.4 }}
+          className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
+        >
+          <h3 className="text-sm font-medium text-zinc-300 flex items-center gap-2 mb-4">
+            <Settings className="w-4 h-4 text-zinc-500" />
+            Configured Providers
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.06]">
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">ID</th>
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Base URL</th>
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Priority</th>
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Enabled</th>
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Models</th>
+                </tr>
+              </thead>
+              <tbody>
+                {config.providers.map((p) => (
+                  <tr key={p.id} className="border-b border-white/[0.03]">
+                    <td className="px-3 py-2.5 text-xs text-white font-medium">{p.id}</td>
+                    <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">{p.base_url}</td>
+                    <td className="px-3 py-2.5 text-xs text-zinc-400">{p.priority}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-xs ${p.enabled ? "text-emerald-400" : "text-zinc-600"}`}>
+                        {p.enabled ? "Yes" : "No"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">
+                      {p.models ? Object.keys(p.models).join(", ") : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
 
       {/* Usage Example */}
       <motion.div
@@ -207,7 +320,7 @@ export function SettingsTab() {
         <div className="relative">
           <pre className="p-4 rounded-lg bg-black/50 border border-white/[0.06] text-xs font-mono text-zinc-300 overflow-x-auto">
 {`curl -X POST ${gatewayUrl} \\
-  -H "Authorization: Bearer ${exampleKey}" \\
+  -H "Authorization: Bearer ${fullKey || "sk-gateway-mysecretkey123"}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "gpt-4o",
@@ -218,7 +331,7 @@ export function SettingsTab() {
           <button
             onClick={() =>
               handleCopy(
-                `curl -X POST ${gatewayUrl} -H "Authorization: Bearer ${exampleKey}" -H "Content-Type: application/json" -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}],"stream":false}'`
+                `curl -X POST ${gatewayUrl} -H "Authorization: Bearer ${fullKey || "sk-gateway-mysecretkey123"}" -H "Content-Type: application/json" -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}],"stream":false}'`
               )
             }
             className="absolute top-2 right-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-colors"
