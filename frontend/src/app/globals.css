@@ -164,3 +164,82 @@
   background: rgba(16, 185, 129, 0.3);
   color: white;
 }
+
+/* ---------------------------------------------------------------------------
+   Aesthetic Refinements & Cool Micro-Animations
+   --------------------------------------------------------------------------- */
+
+/* Moving background blur glows */
+@keyframes drift {
+  0% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(50px, -80px) scale(1.15) rotate(120deg);
+  }
+  66% {
+    transform: translate(-30px, 40px) scale(0.9) rotate(240deg);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1) rotate(360deg);
+  }
+}
+
+@keyframes drift-reverse {
+  0% {
+    transform: translate(0px, 0px) scale(1) rotate(360deg);
+  }
+  33% {
+    transform: translate(-60px, 40px) scale(0.85) rotate(240deg);
+  }
+  66% {
+    transform: translate(30px, -60px) scale(1.1) rotate(120deg);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+}
+
+.bg-glow-1 {
+  animation: drift 35s infinite alternate ease-in-out;
+}
+
+.bg-glow-2 {
+  animation: drift-reverse 40s infinite alternate ease-in-out;
+}
+
+/* Glassmorphism mapping for dashboard cards & containers */
+div[class*="bg-[#11111a]"], 
+section[class*="bg-[#11111a]"],
+article[class*="bg-[#11111a]"] {
+  background: rgba(17, 17, 26, 0.45) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 0 rgba(255, 255, 255, 0.02) !important;
+}
+
+div[class*="bg-[#11111a]"]:hover, 
+section[class*="bg-[#11111a]"]:hover,
+article[class*="bg-[#11111a]"]:hover {
+  background: rgba(17, 17, 26, 0.65) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.05) !important;
+  transform: translateY(-2px);
+}
+
+/* Soft breathing animation for active items */
+@keyframes neon-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+  }
+}
+
+.active-nav-glow {
+  animation: neon-pulse 3s infinite ease-in-out;
+}
+

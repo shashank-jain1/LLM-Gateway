@@ -42,9 +42,14 @@ export function Dashboard() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0a0a0f] text-white">
+    <div className="flex h-screen overflow-hidden bg-[#07070c] text-white relative">
+      {/* Background Cosmic Glows */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/[0.04] blur-[130px] pointer-events-none bg-glow-1 z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-500/[0.04] blur-[130px] pointer-events-none bg-glow-2 z-0" />
+      <div className="absolute top-[35%] left-[20%] w-[35%] h-[35%] rounded-full bg-blue-500/[0.02] blur-[150px] pointer-events-none bg-glow-1 z-0" />
+
       <Sidebar />
-      <main className="flex-1 h-full overflow-y-auto">
+      <main className="flex-1 h-full overflow-y-auto relative z-10">
         <div className="p-6 lg:p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">

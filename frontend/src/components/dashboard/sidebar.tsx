@@ -39,8 +39,8 @@ export function Sidebar() {
     >
       {/* Logo Area */}
       <div className="flex items-center gap-3 p-4 border-b border-white/[0.06]">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 shrink-0">
-          <Zap className="w-4 h-4 text-white" />
+        <div className="flex items-center justify-center w-8 h-8 text-xl shrink-0 select-none">
+          👾
         </div>
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
