@@ -221,6 +221,7 @@ async def translate_stream(openai_stream: AsyncIterator[bytes]) -> AsyncIterator
     msg_id = f"msg_{uuid.uuid4().hex[:20]}"
     sent_start = False
     content_block_started = False
+    open_tool_calls = {}  # index -> {"id": tc_id, "name": tc_name, "anthropic_index": int}
     model_name = "unknown"
     buffer = ""
 
@@ -294,6 +295,52 @@ async def translate_stream(openai_stream: AsyncIterator[bytes]) -> AsyncIterator
                 }
                 yield f"event: content_block_delta\ndata: {json.dumps(delta_event)}\n\n".encode("utf-8")
 
+            # Extract tool calls from delta
+            tool_calls = delta.get("tool_calls", [])
+            for tc in tool_calls:
+                tc_idx = tc.get("index")
+                if tc_idx is None:
+                    continue
+
+                tc_id = tc.get("id")
+                function = tc.get("function", {})
+                tc_name = function.get("name")
+                tc_args = function.get("arguments")
+
+                # Map to Anthropic index. If we started index 0 as text, start tool calls from index 1.
+                anthropic_idx = tc_idx + 1
+
+                # If this is the start of a tool call
+                if tc_id and tc_name:
+                    open_tool_calls[tc_idx] = {
+                        "id": tc_id,
+                        "name": tc_name,
+                        "anthropic_index": anthropic_idx
+                    }
+                    block_start_event = {
+                        "type": "content_block_start",
+                        "index": anthropic_idx,
+                        "content_block": {
+                            "type": "tool_use",
+                            "id": tc_id,
+                            "name": tc_name,
+                            "input": {}
+                        }
+                    }
+                    yield f"event: content_block_start\ndata: {json.dumps(block_start_event)}\n\n".encode("utf-8")
+
+                # If we have arguments partial json delta
+                if tc_args:
+                    block_delta_event = {
+                        "type": "content_block_delta",
+                        "index": anthropic_idx,
+                        "delta": {
+                            "type": "input_json_delta",
+                            "partial_json": tc_args
+                        }
+                    }
+                    yield f"event: content_block_delta\ndata: {json.dumps(block_delta_event)}\n\n".encode("utf-8")
+
             # 3. Check for finish reason / end of block
             finish_reason = choice.get("finish_reason")
             if finish_reason:
@@ -304,6 +351,14 @@ async def translate_stream(openai_stream: AsyncIterator[bytes]) -> AsyncIterator
                     }
                     yield f"event: content_block_stop\ndata: {json.dumps(block_stop_event)}\n\n".encode("utf-8")
                     content_block_started = False
+
+                for tc_idx, tc_state in list(open_tool_calls.items()):
+                    block_stop_event = {
+                        "type": "content_block_stop",
+                        "index": tc_state["anthropic_index"],
+                    }
+                    yield f"event: content_block_stop\ndata: {json.dumps(block_stop_event)}\n\n".encode("utf-8")
+                open_tool_calls.clear()
 
                 stop_reason = "end_turn"
                 if finish_reason == "stop":
@@ -325,6 +380,13 @@ async def translate_stream(openai_stream: AsyncIterator[bytes]) -> AsyncIterator
         block_stop_event = {
             "type": "content_block_stop",
             "index": 0,
+        }
+        yield f"event: content_block_stop\ndata: {json.dumps(block_stop_event)}\n\n".encode("utf-8")
+
+    for tc_idx, tc_state in list(open_tool_calls.items()):
+        block_stop_event = {
+            "type": "content_block_stop",
+            "index": tc_state["anthropic_index"],
         }
         yield f"event: content_block_stop\ndata: {json.dumps(block_stop_event)}\n\n".encode("utf-8")
 

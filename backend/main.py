@@ -65,11 +65,18 @@ def create_app() -> FastAPI:
     # ---- Auth helper -------------------------------------------------------
 
     def _check_auth(authorization: Optional[str], request: Optional[Request] = None, require_admin: bool = False) -> None:
-        if not authorization:
-            raise HTTPException(status_code=401, detail="Missing Authorization header")
-        if not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Invalid Authorization header format")
-        token = authorization[7:]
+        token = None
+        if authorization:
+            if authorization.startswith("Bearer "):
+                token = authorization[7:]
+            else:
+                token = authorization
+        
+        if not token and request:
+            token = request.headers.get("x-api-key")
+
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing Authorization or x-api-key header")
         cfg = get_config()
         valid_keys = cfg.gateway.effective_admin_keys if require_admin else cfg.gateway.api_keys
         if token not in valid_keys:
@@ -229,6 +236,7 @@ def create_app() -> FastAPI:
     # ---- /v1/messages (Anthropic Compatibility) -----------------------------
 
     @app.post("/v1/messages")
+    @app.post("/v1/v1/messages")
     async def messages(request: Request, authorization: Optional[str] = Header(None)):
         _check_auth(authorization, request=request)
         body = await request.json()
@@ -355,8 +363,9 @@ def create_app() -> FastAPI:
     # ---- /v1/models -------------------------------------------------------
 
     @app.get("/v1/models")
-    async def list_models(authorization: Optional[str] = Header(None)):
-        _check_auth(authorization)
+    @app.get("/v1/v1/models")
+    async def list_models(request: Request, authorization: Optional[str] = Header(None)):
+        _check_auth(authorization, request=request)
         cfg = get_config()
         virtual_models: Dict[str, List[str]] = {}
         for p in cfg.providers:
@@ -365,20 +374,43 @@ def create_app() -> FastAPI:
             for vname in p.models:
                 virtual_models.setdefault(vname, []).append(p.id)
 
+        # Detect Anthropic client
+        is_anthropic = bool(
+            request.headers.get("x-api-key") or 
+            "anthropic" in request.headers.get("user-agent", "").lower() or
+            "claude" in request.headers.get("user-agent", "").lower()
+        )
+
         model_list = []
         for vname, provider_ids in sorted(virtual_models.items()):
-            model_list.append({
-                "id": vname,
-                "object": "model",
-                "created": int(time.time()),
-                "owned_by": "llm-gateway",
-                "providers": provider_ids,
-            })
+            if is_anthropic:
+                model_list.append({
+                    "type": "model",
+                    "id": vname,
+                    "display_name": vname,
+                    "created_at": "2024-01-01T00:00:00Z"
+                })
+            else:
+                model_list.append({
+                    "id": vname,
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "llm-gateway",
+                    "providers": provider_ids,
+                })
 
-        return JSONResponse(content={
-            "object": "list",
-            "data": model_list,
-        })
+        if is_anthropic:
+            return JSONResponse(content={
+                "data": model_list,
+                "has_more": False,
+                "first_id": model_list[0]["id"] if model_list else None,
+                "last_id": model_list[-1]["id"] if model_list else None
+            })
+        else:
+            return JSONResponse(content={
+                "object": "list",
+                "data": model_list,
+            })
 
     # ---- Admin: status ----------------------------------------------------
 
