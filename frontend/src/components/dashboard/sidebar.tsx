@@ -35,7 +35,7 @@ export function Sidebar() {
     <aside
       className={`${
         sidebarCollapsed ? "w-16" : "w-64"
-      } flex flex-col border-r border-white/[0.06] bg-[#0d0d14] transition-all duration-300 ease-in-out relative`}
+      } h-screen sticky top-0 shrink-0 flex flex-col border-r border-white/[0.06] bg-[#0d0d14] transition-all duration-300 ease-in-out relative`}
     >
       {/* Logo Area */}
       <div className="flex items-center gap-3 p-4 border-b border-white/[0.06]">

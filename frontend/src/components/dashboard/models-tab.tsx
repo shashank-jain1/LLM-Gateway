@@ -31,7 +31,7 @@ export function ModelsTab() {
     { bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/20" },
   ];
 
-  const providerColorMap: Record<string, ReturnType<typeof colorPalette>[number]> = {};
+  const providerColorMap: Record<string, (typeof colorPalette)[number]> = {};
   providers.forEach((p, i) => {
     providerColorMap[p.provider_id] = colorPalette[i % colorPalette.length];
   });

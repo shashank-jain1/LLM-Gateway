@@ -16,7 +16,7 @@ let healthCheckInterval: NodeJS.Timeout | null = null;
 
 const GATEWAY_PORT = 8001;
 const GATEWAY_URL = `http://127.0.0.1:${GATEWAY_PORT}`;
-const GATEWAY_DIR = `/home/shashank/Downloads/LLM Gateway/backend`;
+const GATEWAY_DIR = join(process.cwd(), "..", "backend");
 
 export function getGatewayUrl() {
   return GATEWAY_URL;

@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # 配置项
-ROOT_DIR="/home/z/my-project/mini-services"
-DIST_DIR="/tmp/build_fullstack_$BUILD_ID/mini-services-dist"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../mini-services" 2>/dev/null && pwd || echo "$SCRIPT_DIR/../mini-services")"
+DIST_DIR="/tmp/build_fullstack_${BUILD_ID:-dev}/mini-services-dist"
 
 main() {
     echo "🚀 开始批量构建..."
@@ -59,8 +60,8 @@ main() {
         fi
     done
     
-    if [ -f ./.zscripts/mini-services-start.sh ]; then
-        cp ./.zscripts/mini-services-start.sh "$DIST_DIR/mini-services-start.sh"
+    if [ -f "$SCRIPT_DIR/mini-services-start.sh" ]; then
+        cp "$SCRIPT_DIR/mini-services-start.sh" "$DIST_DIR/mini-services-start.sh"
         chmod +x "$DIST_DIR/mini-services-start.sh"
     fi
     

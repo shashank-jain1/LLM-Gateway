@@ -32,6 +32,7 @@ from backend.history import request_history
 from backend.logger import get_logger, log_request, setup_logging
 from backend.proxy import close_client
 from backend.router import route_non_streaming, route_streaming
+from backend.anthropic_compat import translate_request, translate_response, translate_stream
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +225,132 @@ def create_app() -> FastAPI:
             content=resp_body,
             headers={"X-Request-ID": request_id, "X-Provider": served_by or "unknown"},
         )
+
+    # ---- /v1/messages (Anthropic Compatibility) -----------------------------
+
+    @app.post("/v1/messages")
+    async def messages(request: Request, authorization: Optional[str] = Header(None)):
+        _check_auth(authorization, request=request)
+        body = await request.json()
+        virtual_model = body.get("model", "")
+        stream = body.get("stream", False)
+        request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+        cfg = get_config()
+
+        # Check if the primary provider candidate for this virtual model is Anthropic
+        from backend.router import _resolve_candidates
+        candidates = _resolve_candidates(virtual_model, cfg, health_tracker)
+        
+        is_anthropic_provider = False
+        if candidates:
+            top_provider = candidates[0]
+            if "anthropic.com" in top_provider.base_url or top_provider.id.lower() == "anthropic":
+                is_anthropic_provider = True
+
+        start = time.monotonic()
+
+        if is_anthropic_provider:
+            # 1. Direct Passthrough to Anthropic Messages endpoint
+            if stream:
+                status, stream_iter, attempt_log = await route_streaming(
+                    "/messages", body, virtual_model, health_tracker, cfg,
+                )
+                total_latency = time.monotonic() - start
+                served_by = attempt_log[-1]["provider_id"] if attempt_log else None
+                log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
+                request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
+
+                if 200 <= status < 300 and stream_iter is not None:
+                    headers = {
+                        "X-Request-ID": request_id,
+                        "X-Provider": served_by or "unknown",
+                        "Content-Type": "text/event-stream",
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                    }
+                    return StreamingResponse(stream_iter, media_type="text/event-stream", headers=headers)
+                else:
+                    return JSONResponse(
+                        status_code=status,
+                        content=stream_iter if isinstance(stream_iter, dict) else {
+                            "error": {"message": "All streaming providers failed", "type": "gateway_error"},
+                        },
+                    )
+            else:
+                status, resp_body, attempt_log = await route_non_streaming(
+                    "/messages", body, virtual_model, health_tracker, cfg,
+                )
+                total_latency = time.monotonic() - start
+                served_by = attempt_log[-1]["provider_id"] if attempt_log else None
+                log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
+                request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
+
+                return JSONResponse(
+                    status_code=status,
+                    content=resp_body,
+                    headers={
+                        "X-Request-ID": request_id,
+                        "X-Provider": served_by or "unknown",
+                    },
+                )
+        else:
+            # 2. Translate Anthropic Messages format to OpenAI Chat Completions format
+            openai_body = translate_request(body)
+            
+            if stream:
+                status, stream_iter, attempt_log = await route_streaming(
+                    "/chat/completions", openai_body, virtual_model, health_tracker, cfg,
+                )
+                total_latency = time.monotonic() - start
+                served_by = attempt_log[-1]["provider_id"] if attempt_log else None
+                log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
+                request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
+
+                if 200 <= status < 300 and stream_iter is not None:
+                    anthropic_stream = translate_stream(stream_iter)
+                    headers = {
+                        "X-Request-ID": request_id,
+                        "X-Provider": served_by or "unknown",
+                        "Content-Type": "text/event-stream",
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                    }
+                    return StreamingResponse(anthropic_stream, media_type="text/event-stream", headers=headers)
+                else:
+                    return JSONResponse(
+                        status_code=status,
+                        content=stream_iter if isinstance(stream_iter, dict) else {
+                            "error": {"message": "All streaming providers failed", "type": "gateway_error"},
+                        },
+                    )
+            else:
+                status, resp_body, attempt_log = await route_non_streaming(
+                    "/chat/completions", openai_body, virtual_model, health_tracker, cfg,
+                )
+                total_latency = time.monotonic() - start
+                served_by = attempt_log[-1]["provider_id"] if attempt_log else None
+                log_request(request_id, virtual_model, attempt_log, status, served_by, total_latency)
+                request_history.add(virtual_model, served_by, attempt_log, status, total_latency, api_key=getattr(request.state, "api_key", None))
+
+                if 200 <= status < 300 and isinstance(resp_body, dict):
+                    anthropic_resp = translate_response(resp_body)
+                    return JSONResponse(
+                        status_code=status,
+                        content=anthropic_resp,
+                        headers={
+                            "X-Request-ID": request_id,
+                            "X-Provider": served_by or "unknown",
+                        },
+                    )
+                else:
+                    return JSONResponse(
+                        status_code=status,
+                        content=resp_body,
+                        headers={
+                            "X-Request-ID": request_id,
+                            "X-Provider": served_by or "unknown",
+                        },
+                    )
 
     # ---- /v1/models -------------------------------------------------------
 

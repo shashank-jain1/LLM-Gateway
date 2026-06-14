@@ -374,11 +374,11 @@ export function ProvidersTab() {
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex flex-row lg:flex-col items-center gap-2 shrink-0">
+                <div className="flex flex-row flex-wrap lg:flex-col items-center gap-2 shrink-0 w-full lg:w-32">
                   <button
                     onClick={() => handleTestProvider(provider.provider_id)}
                     disabled={testingId === provider.provider_id}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all duration-200 disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all duration-200 disabled:opacity-50 w-[calc(50%-4px)] lg:w-full"
                   >
                     {testingId === provider.provider_id ? (
                       <>
@@ -395,7 +395,7 @@ export function ProvidersTab() {
 
                   <button
                     onClick={() => openEditDialog(provider.provider_id)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all duration-200"
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all duration-200 w-[calc(50%-4px)] lg:w-full"
                   >
                     <Edit className="w-3.5 h-3.5" />
                     Edit
@@ -404,11 +404,11 @@ export function ProvidersTab() {
                   <button
                     onClick={() => handleToggle(provider.provider_id, provider.enabled)}
                     disabled={isToggling}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                       provider.enabled
                         ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
                         : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
-                    } disabled:opacity-50`}
+                    } disabled:opacity-50 w-[calc(50%-4px)] lg:w-full`}
                   >
                     {isToggling ? (
                       <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -424,7 +424,7 @@ export function ProvidersTab() {
                     <AlertDialogTrigger asChild>
                       <button
                         disabled={isDeleting}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-all duration-200 disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-all duration-200 disabled:opacity-50 w-[calc(50%-4px)] lg:w-full"
                       >
                         {isDeleting ? (
                           <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -679,7 +679,11 @@ export function ProvidersTab() {
             <Button
               onClick={handleAddProvider}
               disabled={!isFormValid || isAdding}
-              className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50"
+              className={
+                (!isFormValid || isAdding)
+                  ? "bg-white/5 text-zinc-600 border border-white/[0.04] cursor-not-allowed text-xs font-medium"
+                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 text-xs font-medium"
+              }
             >
               {isAdding ? (
                 <>
@@ -819,7 +823,11 @@ export function ProvidersTab() {
             <Button
               onClick={handleEditProvider}
               disabled={!formBaseUrl.trim() || !formApiKey.trim() || isEditing}
-              className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50"
+              className={
+                (!formBaseUrl.trim() || !formApiKey.trim() || isEditing)
+                  ? "bg-white/5 text-zinc-600 border border-white/[0.04] cursor-not-allowed text-xs font-medium"
+                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 text-xs font-medium"
+              }
             >
               {isEditing ? (
                 <>

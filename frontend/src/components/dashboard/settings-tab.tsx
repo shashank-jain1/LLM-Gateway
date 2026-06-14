@@ -110,10 +110,12 @@ export function SettingsTab() {
     initEditsFromConfig();
   };
 
-  const handleCopy = (text: string, index: number) => {
+  const handleCopy = (text: string, index?: number) => {
     navigator.clipboard.writeText(text);
-    setCopiedKeyIndex(index);
-    setTimeout(() => setCopiedKeyIndex(null), 2000);
+    if (index !== undefined) {
+      setCopiedKeyIndex(index);
+      setTimeout(() => setCopiedKeyIndex(null), 2000);
+    }
   };
 
   const handleOpenAddKeyDialog = () => {
