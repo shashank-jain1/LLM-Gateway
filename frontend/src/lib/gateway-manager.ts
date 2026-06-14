@@ -14,8 +14,8 @@ let gatewayProcess: ChildProcess | null = null;
 let isStarting = false;
 let healthCheckInterval: NodeJS.Timeout | null = null;
 
-const GATEWAY_PORT = 8001;
-const GATEWAY_URL = `http://127.0.0.1:${GATEWAY_PORT}`;
+const GATEWAY_PORT = process.env.LLM_GATEWAY_PORT ? parseInt(process.env.LLM_GATEWAY_PORT) : 8001;
+const GATEWAY_URL = process.env.LLM_GATEWAY_BACKEND_URL || `http://127.0.0.1:${GATEWAY_PORT}`;
 const GATEWAY_DIR = join(process.cwd(), "..", "backend");
 
 export function getGatewayUrl() {
@@ -118,8 +118,11 @@ export async function gatewayFetch(
 ): Promise<Response> {
   // Try direct connection first
   if (!(await isGatewayRunning())) {
-    // Try to start it
-    await startGateway();
+    // Only try to start a local child process if the URL points to localhost
+    const isLocal = GATEWAY_URL.includes("localhost") || GATEWAY_URL.includes("127.0.0.1") || GATEWAY_URL.includes("0.0.0.0");
+    if (isLocal) {
+      await startGateway();
+    }
   }
 
   const url = `${GATEWAY_URL}${path}`;
