@@ -42,7 +42,17 @@ def _resolve_candidates(
     for p in config.providers:
         if not p.enabled:
             continue
-        if virtual_model not in p.models:
+        is_supported = (virtual_model in p.models)
+        if not is_supported:
+            try:
+                from backend.main import get_fetched_models_for_provider
+                fetched = get_fetched_models_for_provider(p.id)
+                if fetched and virtual_model in fetched:
+                    is_supported = True
+            except ImportError:
+                pass
+        
+        if not is_supported:
             continue
         if health_tracker.is_available(p.id, now):
             healthy.append((p.priority, p))

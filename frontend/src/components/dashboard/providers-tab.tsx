@@ -320,6 +320,26 @@ export function ProvidersTab() {
                     </div>
                   )}
 
+                  {/* Auto-Fetched Models */}
+                  {provider.fetched_models && provider.fetched_models.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
+                        <Boxes className="w-3 h-3 text-violet-400" />
+                        Auto-Fetched Models
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {provider.fetched_models.map((model) => (
+                          <span
+                            key={model}
+                            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-violet-500/10 text-violet-400 border border-violet-500/10 font-mono"
+                          >
+                            {model}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Stats Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div className="space-y-1">
@@ -542,7 +562,21 @@ export function ProvidersTab() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-zinc-400 font-mono">
-                      {provider.models ? Object.keys(provider.models).join(", ") : "—"}
+                      <div className="flex flex-col gap-1">
+                        {provider.models && Object.keys(provider.models).length > 0 && (
+                          <div>
+                            <span className="text-[10px] text-zinc-500 uppercase mr-1">Mapped:</span>
+                            {Object.keys(provider.models).join(", ")}
+                          </div>
+                        )}
+                        {provider.fetched_models && provider.fetched_models.length > 0 && (
+                          <div>
+                            <span className="text-[10px] text-violet-500/80 uppercase mr-1">Fetched:</span>
+                            {provider.fetched_models.join(", ")}
+                          </div>
+                        )}
+                        {(!provider.models || Object.keys(provider.models).length === 0) && (!provider.fetched_models || provider.fetched_models.length === 0) && "—"}
+                      </div>
                     </td>
                   </tr>
                 ))}

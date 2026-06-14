@@ -36,6 +36,64 @@ from backend.anthropic_compat import translate_request, translate_response, tran
 
 
 # ---------------------------------------------------------------------------
+# Auto-fetch models from active providers
+# ---------------------------------------------------------------------------
+
+import httpx
+
+_fetched_provider_models: Dict[str, List[str]] = {}
+
+def get_fetched_models_for_provider(provider_id: str) -> List[str]:
+    return _fetched_provider_models.get(provider_id, [])
+
+async def fetch_models_for_provider(provider: ProviderConfig) -> List[str]:
+    """Fetch the list of models from the provider's /models endpoint."""
+    url = f"{provider.base_url.rstrip('/')}/models"
+    headers = {}
+    if provider.api_key:
+        headers["Authorization"] = f"Bearer {provider.api_key}"
+    if provider.extra_headers:
+        headers.update(provider.extra_headers)
+        
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                model_ids = []
+                # OpenAI / models compatible lists return a 'data' array
+                if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+                    for m in data["data"]:
+                        if isinstance(m, dict) and "id" in m:
+                            model_ids.append(m["id"])
+                elif isinstance(data, list):
+                    for m in data:
+                        if isinstance(m, str):
+                            model_ids.append(m)
+                        elif isinstance(m, dict) and "id" in m:
+                            model_ids.append(m["id"])
+                            
+                if model_ids:
+                    _fetched_provider_models[provider.id] = model_ids
+                    get_logger().info(f"Auto-fetched {len(model_ids)} models for provider '{provider.id}'")
+                    return model_ids
+    except Exception as exc:
+        get_logger().error(f"Failed to auto-fetch models for provider '{provider.id}': {str(exc)}")
+        
+    return []
+
+async def fetch_all_provider_models():
+    """Fetch models from all active providers."""
+    cfg = get_config()
+    tasks = []
+    for provider in cfg.providers:
+        if provider.enabled:
+            tasks.append(fetch_models_for_provider(provider))
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
@@ -373,6 +431,8 @@ def create_app() -> FastAPI:
                 continue
             for vname in p.models:
                 virtual_models.setdefault(vname, []).append(p.id)
+            for fname in get_fetched_models_for_provider(p.id):
+                virtual_models.setdefault(fname, []).append(p.id)
 
         # Detect Anthropic client
         is_anthropic = bool(
@@ -437,6 +497,7 @@ def create_app() -> FastAPI:
                 "priority": p_cfg.priority if p_cfg else 99,
                 "base_url": p_cfg.base_url if p_cfg else "",
                 "models": p_cfg.models if p_cfg else {},
+                "fetched_models": get_fetched_models_for_provider(state.provider_id),
             })
         return JSONResponse(content={
             "providers": result,
@@ -469,6 +530,7 @@ def create_app() -> FastAPI:
         try:
             new_cfg = reload_config()
             health_tracker.sync_with_config(new_cfg)
+            asyncio.create_task(fetch_all_provider_models())
             return JSONResponse(content={"status": "ok", "message": "Config reloaded"})
         except Exception as exc:
             return JSONResponse(status_code=500, content={"status": "error", "message": str(exc)})
@@ -483,6 +545,8 @@ def create_app() -> FastAPI:
             provider = ProviderConfig(**body)
             add_provider_to_config(provider)
             health_tracker.sync_with_config(get_config())
+            if provider.enabled:
+                asyncio.create_task(fetch_models_for_provider(provider))
             logger = get_logger()
             logger.info(f"Provider added: {provider.id}")
             return JSONResponse(content={
@@ -501,7 +565,13 @@ def create_app() -> FastAPI:
         body = await request.json()
         try:
             update_provider_in_config(provider_id, body)
-            health_tracker.sync_with_config(get_config())
+            cfg = get_config()
+            provider = next((p for p in cfg.providers if p.id == provider_id), None)
+            if provider and provider.enabled:
+                asyncio.create_task(fetch_models_for_provider(provider))
+            else:
+                _fetched_provider_models.pop(provider_id, None)
+            health_tracker.sync_with_config(cfg)
             return JSONResponse(content={
                 "status": "ok",
                 "message": f"Provider '{provider_id}' updated",
@@ -516,6 +586,7 @@ def create_app() -> FastAPI:
         _check_auth(authorization, require_admin=True)
         try:
             delete_provider_from_config(provider_id)
+            _fetched_provider_models.pop(provider_id, None)
             health_tracker.sync_with_config(get_config())
             logger = get_logger()
             logger.info(f"Provider deleted: {provider_id}")
@@ -536,6 +607,7 @@ def create_app() -> FastAPI:
         for p in cfg.providers:
             if p.id == provider_id:
                 p.enabled = True
+                asyncio.create_task(fetch_models_for_provider(p))
                 found = True
                 break
         if not found:
@@ -551,6 +623,7 @@ def create_app() -> FastAPI:
         for p in cfg.providers:
             if p.id == provider_id:
                 p.enabled = False
+                _fetched_provider_models.pop(provider_id, None)
                 found = True
                 break
         if not found:
@@ -638,7 +711,11 @@ def create_app() -> FastAPI:
             "uptime": time.time(),
         })
 
-    # ---- Shutdown ----------------------------------------------------------
+    # ---- Startup & Shutdown ------------------------------------------------
+    
+    @app.on_event("startup")
+    async def startup_event():
+        asyncio.create_task(fetch_all_provider_models())
 
     @app.on_event("shutdown")
     async def shutdown_event():

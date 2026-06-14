@@ -17,6 +17,7 @@ export interface ProviderState {
   priority: number;
   base_url: string;
   models: Record<string, string>;
+  fetched_models?: string[];
 }
 
 export interface GatewayStatus {

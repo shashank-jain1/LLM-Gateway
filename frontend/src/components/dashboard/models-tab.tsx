@@ -20,6 +20,16 @@ export function ModelsTab() {
         modelMappings[virtualModel][provider.provider_id] = actualModel;
       }
     }
+    if (provider.fetched_models) {
+      for (const fetchedModel of provider.fetched_models) {
+        if (!modelMappings[fetchedModel]) {
+          modelMappings[fetchedModel] = {};
+        }
+        if (!modelMappings[fetchedModel][provider.provider_id]) {
+          modelMappings[fetchedModel][provider.provider_id] = `${fetchedModel} (Auto-fetched)`;
+        }
+      }
+    }
   }
 
   // Provider colors based on index
