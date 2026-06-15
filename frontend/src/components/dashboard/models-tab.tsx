@@ -2,8 +2,8 @@
 
 import { useGatewayStore } from "@/lib/gateway-store";
 import { motion } from "framer-motion";
-import { Boxes, Server, ArrowRight, Layers, CheckCircle2, XCircle } from "lucide-react";
-import { ReactNode } from "react";
+import { Boxes, ArrowRight, Layers, CheckCircle2, XCircle, Search, X } from "lucide-react";
+import { ReactNode, useMemo, useState } from "react";
 
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -19,6 +19,7 @@ export function ModelsTab() {
   const { status, models } = useGatewayStore();
   const modelList = models?.data ?? [];
   const providers = status?.providers ?? [];
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Build model mappings from live provider data
   const modelMappings: Record<string, Record<string, string>> = {};
@@ -57,19 +58,88 @@ export function ModelsTab() {
     providerColorMap[p.provider_id] = colorPalette[i % colorPalette.length];
   });
 
+  // Filter models based on search query (matches model id or provider ids)
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredModels = useMemo(() => {
+    if (!normalizedQuery) return modelList;
+    return modelList.filter((model) => {
+      if (model.id.toLowerCase().includes(normalizedQuery)) return true;
+      if (model.providers.some((pid) => pid.toLowerCase().includes(normalizedQuery))) return true;
+      return false;
+    });
+  }, [modelList, normalizedQuery]);
+
+  // Filter model mapping table by virtual model name
+  const filteredModelMappings = useMemo(() => {
+    if (!normalizedQuery) return modelMappings;
+    const result: Record<string, Record<string, string>> = {};
+    for (const [virtual, providerMap] of Object.entries(modelMappings)) {
+      if (
+        virtual.toLowerCase().includes(normalizedQuery) ||
+        Object.keys(providerMap).some((pid) => pid.toLowerCase().includes(normalizedQuery))
+      ) {
+        result[virtual] = providerMap;
+      }
+    }
+    return result;
+  }, [modelMappings, normalizedQuery]);
+
+  const totalMappings = Object.values(modelMappings).reduce(
+    (sum, m) => sum + Object.keys(m).length,
+    0
+  );
+  const filteredMappingsCount = Object.values(filteredModelMappings).reduce(
+    (sum, m) => sum + Object.keys(m).length,
+    0
+  );
+
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h2 className="text-lg font-semibold text-white tracking-tight">Virtual Models</h2>
-        <p className="text-sm text-zinc-500 mt-0.5 font-medium">
-          Virtual model names map to provider-specific models for seamless failover
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold text-white tracking-tight">Virtual Models</h2>
+          <p className="text-sm text-zinc-500 mt-0.5 font-medium">
+            Virtual model names map to provider-specific models for seamless failover
+          </p>
+        </div>
+
+        {/* Search */}
+        {modelList.length > 0 && (
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search models or providers..."
+              className="w-full pl-9 pr-9 py-2 text-xs bg-[#0c0c16]/70 border border-white/[0.06] rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/40 focus:ring-2 focus:ring-indigo-500/10 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Active search summary */}
+      {normalizedQuery && (
+        <p className="text-xs text-zinc-500 -mt-6">
+          Showing {filteredModels.length} of {modelList.length} model{modelList.length === 1 ? "" : "s"}
+          {totalMappings > 0 &&
+            ` · ${filteredMappingsCount} of ${totalMappings} mapping${totalMappings === 1 ? "" : "s"}`}
+        </p>
+      )}
 
       {/* Model війModel Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {modelList.map((model, i) => (
+        {filteredModels.map((model, i) => (
           <motion.div
             key={model.id}
             initial={{ opacity: 0, y: 16 }}
@@ -127,7 +197,7 @@ export function ModelsTab() {
       )}
 
       {/* Model Mapping Table */}
-      {Object.keys(modelMappings).length > 0 && (
+      {Object.keys(filteredModelMappings).length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-4 h-4 text-zinc-500" />
@@ -151,7 +221,7 @@ export function ModelsTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(modelMappings).flatMap(([virtual, providerMap]) =>
+                  {Object.entries(filteredModelMappings).flatMap(([virtual, providerMap]) =>
                     Object.entries(providerMap).map(([providerId, actual], idx) => {
                       const provider = providers.find((p) => p.provider_id === providerId);
                       const isEnabled = provider?.enabled ?? true;
