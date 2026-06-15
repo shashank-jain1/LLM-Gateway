@@ -19,7 +19,7 @@ export function ToastContainer() {
             transition={{ duration: 0.2 }}
             className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-lg border shadow-xl backdrop-blur-sm ${
               toast.type === "success"
-                ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                ? "bg-teal-500/15 border-teal-500/30 text-teal-300"
                 : "bg-rose-500/15 border-rose-500/30 text-rose-300"
             }`}
           >

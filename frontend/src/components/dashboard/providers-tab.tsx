@@ -17,6 +17,8 @@ import {
   Boxes,
   Edit,
   Play,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -72,6 +74,8 @@ export function ProvidersTab() {
   const [formPriority, setFormPriority] = useState("1");
   const [formEnabled, setFormEnabled] = useState(true);
   const [formModels, setFormModels] = useState<ModelMapping[]>([{ virtual: "", actual: "" }]);
+  const [expandedMappingProviders, setExpandedMappingProviders] = useState<Set<string>>(new Set());
+  const [expandedFetchedProviders, setExpandedFetchedProviders] = useState<Set<string>>(new Set());
 
   const providers = status?.providers ?? [];
 
@@ -212,7 +216,7 @@ export function ProvidersTab() {
           </span>
           <button
             onClick={() => setAddDialogOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all duration-200"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-teal-500/10 text-teal-400 border border-teal-500/20 hover:bg-teal-500/20 transition-all duration-200"
           >
             <Plus className="w-4 h-4" />
             Add Provider
@@ -232,7 +236,7 @@ export function ProvidersTab() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.08, duration: 0.4, ease: "easeOut" }}
-              className={`rounded-xl bg-[#11111a] border p-6 hover:border-white/[0.12] transition-all duration-300 ${
+              className={`rounded-xl bg-[#0c0c16]/70 border p-6 hover:border-white/[0.12] transition-all duration-300 ${
                 !provider.enabled
                   ? "border-zinc-700/30 opacity-60"
                   : provider.status === "healthy"
@@ -249,7 +253,7 @@ export function ProvidersTab() {
                         !provider.enabled
                           ? "bg-zinc-500/10 border border-zinc-500/20"
                           : provider.status === "healthy"
-                          ? "bg-emerald-500/10 border border-emerald-500/20"
+                          ? "bg-teal-500/10 border border-teal-500/20"
                           : "bg-amber-500/10 border border-amber-500/20"
                       }`}
                     >
@@ -258,7 +262,7 @@ export function ProvidersTab() {
                           !provider.enabled
                             ? "text-zinc-500"
                             : provider.status === "healthy"
-                            ? "text-emerald-400"
+                            ? "text-teal-400"
                             : "text-amber-400"
                         }`}
                       />
@@ -271,7 +275,7 @@ export function ProvidersTab() {
                             !provider.enabled
                               ? "bg-zinc-500/10 text-zinc-500"
                               : provider.status === "healthy"
-                              ? "bg-emerald-500/10 text-emerald-400"
+                              ? "bg-teal-500/10 text-teal-400"
                               : "bg-amber-500/10 text-amber-400"
                           }`}
                         >
@@ -301,17 +305,38 @@ export function ProvidersTab() {
                   {/* Models Mapping */}
                   {provider.models && Object.keys(provider.models).length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
-                        <Boxes className="w-3 h-3" />
-                        Model Mappings
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
+                          <Boxes className="w-3 h-3" />
+                          Model Mappings
+                        </p>
+                        {Object.keys(provider.models).length > 3 && (
+                          <button
+                            onClick={() => {
+                              setExpandedMappingProviders(prev => {
+                                const next = new Set(prev);
+                                if (next.has(provider.provider_id)) next.delete(provider.provider_id);
+                                else next.add(provider.provider_id);
+                                return next;
+                              });
+                            }}
+                            className="flex items-center gap-0.5 text-[10px] text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                          >
+                            {expandedMappingProviders.has(provider.provider_id) ? (
+                              <>Show less <ChevronUp className="w-3 h-3" /></>
+                            ) : (
+                              <>+{Object.keys(provider.models).length - 3} more <ChevronDown className="w-3 h-3" /></>
+                            )}
+                          </button>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(provider.models).map(([virtual, actual]) => (
+                        {Object.entries(provider.models).slice(0, expandedMappingProviders.has(provider.provider_id) ? undefined : 3).map(([virtual, actual]) => (
                           <span
                             key={virtual}
-                            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/10 font-mono"
+                            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 font-mono"
                           >
-                            <span className="text-cyan-300">{virtual}</span>
+                            <span className="text-indigo-300">{virtual}</span>
                             <span className="text-zinc-600">→</span>
                             <span className="text-zinc-400">{actual}</span>
                           </span>
@@ -323,12 +348,36 @@ export function ProvidersTab() {
                   {/* Auto-Fetched Models */}
                   {provider.fetched_models && provider.fetched_models.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
-                        <Boxes className="w-3 h-3 text-violet-400" />
-                        Auto-Fetched Models
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-wider flex items-center gap-1">
+                          <Boxes className="w-3 h-3 text-violet-400" />
+                          Auto-Fetched Models
+                        </p>
+                        {provider.fetched_models.length > 3 && (
+                          <button
+                            onClick={() => {
+                              setExpandedFetchedProviders(prev => {
+                                const next = new Set(prev);
+                                if (next.has(provider.provider_id)) next.delete(provider.provider_id);
+                                else next.add(provider.provider_id);
+                                return next;
+                              });
+                            }}
+                            className="flex items-center gap-0.5 text-[10px] text-violet-400 hover:text-violet-300 font-medium transition-colors"
+                          >
+                            {expandedFetchedProviders.has(provider.provider_id) ? (
+                              <>Show less <ChevronUp className="w-3 h-3" /></>
+                            ) : (
+                              <>+{provider.fetched_models.length - 3} more <ChevronDown className="w-3 h-3" /></>
+                            )}
+                          </button>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {provider.fetched_models.map((model) => (
+                        {(expandedFetchedProviders.has(provider.provider_id)
+                          ? provider.fetched_models
+                          : provider.fetched_models.slice(0, 3)
+                        ).map((model) => (
                           <span
                             key={model}
                             className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-violet-500/10 text-violet-400 border border-violet-500/10 font-mono"
@@ -348,7 +397,7 @@ export function ProvidersTab() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Success Rate</p>
-                      <p className="text-lg font-bold text-emerald-400">
+                      <p className="text-lg font-bold text-teal-400">
                         {provider.total_requests > 0
                           ? ((provider.total_successes / provider.total_requests) * 100).toFixed(1)
                           : "0"}%
@@ -398,7 +447,7 @@ export function ProvidersTab() {
                   <button
                     onClick={() => handleTestProvider(provider.provider_id)}
                     disabled={testingId === provider.provider_id}
-                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all duration-200 disabled:opacity-50 w-[calc(50%-4px)] lg:w-full"
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all duration-200 disabled:opacity-50 w-[calc(50%-4px)] lg:w-full"
                   >
                     {testingId === provider.provider_id ? (
                       <>
@@ -427,7 +476,7 @@ export function ProvidersTab() {
                     className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                       provider.enabled
                         ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
-                        : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "bg-teal-500/10 text-teal-400 border border-teal-500/20 hover:bg-teal-500/20"
                     } disabled:opacity-50 w-[calc(50%-4px)] lg:w-full`}
                   >
                     {isToggling ? (
@@ -454,7 +503,7 @@ export function ProvidersTab() {
                         Delete
                       </button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent className="bg-[#1a1a2e] border-white/10">
+                    <AlertDialogContent className="bg-[#0c0c16]/70 border-white/10">
                       <AlertDialogHeader>
                         <AlertDialogTitle className="text-white">Delete Provider</AlertDialogTitle>
                         <AlertDialogDescription className="text-zinc-400">
@@ -490,7 +539,7 @@ export function ProvidersTab() {
           <p className="text-xs mt-1">Add a provider to get started</p>
           <button
             onClick={() => setAddDialogOpen(true)}
-            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all duration-200"
+            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-teal-500/10 text-teal-400 border border-teal-500/20 hover:bg-teal-500/20 transition-all duration-200"
           >
             <Plus className="w-4 h-4" />
             Add Provider
@@ -500,7 +549,7 @@ export function ProvidersTab() {
 
       {/* Provider Config Summary */}
       {providers.length > 0 && (
-        <div className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5">
+        <div className="rounded-xl bg-[#0c0c16]/70 border border-white/[0.06] p-5">
           <h3 className="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
             <Globe className="w-4 h-4" />
             Connection Details
@@ -537,16 +586,16 @@ export function ProvidersTab() {
                     <td className="px-3 py-2.5">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         provider.priority === 1
-                          ? "bg-emerald-500/10 text-emerald-400"
+                          ? "bg-teal-500/10 text-teal-400"
                           : provider.priority === 2
-                          ? "bg-cyan-500/10 text-cyan-400"
+                          ? "bg-indigo-500/10 text-indigo-400"
                           : "bg-amber-500/10 text-amber-400"
                       }`}>
                         {provider.priority}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <span className={`text-xs ${provider.enabled ? "text-emerald-400" : "text-zinc-600"}`}>
+                      <span className={`text-xs ${provider.enabled ? "text-teal-400" : "text-zinc-600"}`}>
                         {provider.enabled ? "Yes" : "No"}
                       </span>
                     </td>
@@ -555,7 +604,7 @@ export function ProvidersTab() {
                         !provider.enabled
                           ? "bg-zinc-500/10 text-zinc-500"
                           : provider.status === "healthy"
-                          ? "bg-emerald-500/10 text-emerald-400"
+                          ? "bg-teal-500/10 text-teal-400"
                           : "bg-amber-500/10 text-amber-400"
                       }`}>
                         {!provider.enabled ? "disabled" : provider.status}
@@ -588,7 +637,7 @@ export function ProvidersTab() {
 
       {/* Add Provider Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="bg-[#1a1a2e] border-white/10 text-white sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-[#0c0c16]/70 border-white/10 text-white sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Add Provider</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -650,7 +699,7 @@ export function ProvidersTab() {
                     checked={formEnabled}
                     onCheckedChange={setFormEnabled}
                   />
-                  <span className={`text-sm ${formEnabled ? "text-emerald-400" : "text-zinc-500"}`}>
+                  <span className={`text-sm ${formEnabled ? "text-teal-400" : "text-zinc-500"}`}>
                     {formEnabled ? "Yes" : "No"}
                   </span>
                 </div>
@@ -663,7 +712,7 @@ export function ProvidersTab() {
                 <Label className="text-zinc-300 text-xs">Model Mappings</Label>
                 <button
                   onClick={addModelRow}
-                  className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  className="text-[10px] text-teal-400 hover:text-teal-300 flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" />
                   Add mapping
@@ -716,7 +765,7 @@ export function ProvidersTab() {
               className={
                 (!isFormValid || isAdding)
                   ? "bg-white/5 text-zinc-600 border border-white/[0.04] cursor-not-allowed text-xs font-medium"
-                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 text-xs font-medium"
+                  : "bg-teal-500/20 text-teal-400 border border-teal-500/20 hover:bg-teal-500/30 text-xs font-medium"
               }
             >
               {isAdding ? (
@@ -740,7 +789,7 @@ export function ProvidersTab() {
         setEditDialogOpen(open);
         if (!open) setEditingId(null);
       }}>
-        <DialogContent className="bg-[#1a1a2e] border-white/10 text-white sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-[#0c0c16]/70 border-white/10 text-white sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Edit Provider: {editingId}</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -791,7 +840,7 @@ export function ProvidersTab() {
                     checked={formEnabled}
                     onCheckedChange={setFormEnabled}
                   />
-                  <span className={`text-sm ${formEnabled ? "text-emerald-400" : "text-zinc-500"}`}>
+                  <span className={`text-sm ${formEnabled ? "text-teal-400" : "text-zinc-500"}`}>
                     {formEnabled ? "Yes" : "No"}
                   </span>
                 </div>
@@ -804,7 +853,7 @@ export function ProvidersTab() {
                 <Label className="text-zinc-300 text-xs">Model Mappings</Label>
                 <button
                   onClick={addModelRow}
-                  className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  className="text-[10px] text-teal-400 hover:text-teal-300 flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" />
                   Add mapping
@@ -860,7 +909,7 @@ export function ProvidersTab() {
               className={
                 (!formBaseUrl.trim() || !formApiKey.trim() || isEditing)
                   ? "bg-white/5 text-zinc-600 border border-white/[0.04] cursor-not-allowed text-xs font-medium"
-                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 text-xs font-medium"
+                  : "bg-teal-500/20 text-teal-400 border border-teal-500/20 hover:bg-teal-500/30 text-xs font-medium"
               }
             >
               {isEditing ? (
@@ -883,11 +932,11 @@ export function ProvidersTab() {
       <Dialog open={!!testResultModal?.open} onOpenChange={(open) => {
         if (!open) setTestResultModal(null);
       }}>
-        <DialogContent className="bg-[#1a1a2e] border-white/10 text-white sm:max-w-md">
+        <DialogContent className="bg-[#0c0c16]/70 border-white/10 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               {testResultModal?.success ? (
-                <span className="text-emerald-400">✓ Test Succeeded</span>
+                <span className="text-teal-400">✓ Test Succeeded</span>
               ) : (
                 <span className="text-rose-400">✗ Test Failed</span>
               )}
@@ -900,7 +949,7 @@ export function ProvidersTab() {
           <div className="py-4">
             <div className={`p-4 rounded-xl border ${
               testResultModal?.success 
-                ? "bg-emerald-500/5 border-emerald-500/20 text-zinc-300" 
+                ? "bg-teal-500/5 border-teal-500/20 text-zinc-300" 
                 : "bg-rose-500/5 border-rose-500/20 text-rose-300"
             }`}>
               <span className="text-xs font-semibold uppercase tracking-wider block mb-2 text-zinc-400">

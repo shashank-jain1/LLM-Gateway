@@ -36,16 +36,16 @@ function StatCard({
 }) {
   const colorMap: Record<string, { bg: string; text: string; border: string; glow: string }> = {
     emerald: {
-      bg: "bg-emerald-500/10",
-      text: "text-emerald-400",
-      border: "border-emerald-500/20",
-      glow: "shadow-emerald-500/5",
+      bg: "bg-teal-500/10",
+      text: "text-teal-400",
+      border: "border-teal-500/20",
+      glow: "shadow-teal-500/5",
     },
     cyan: {
-      bg: "bg-cyan-500/10",
-      text: "text-cyan-400",
-      border: "border-cyan-500/20",
-      glow: "shadow-cyan-500/5",
+      bg: "bg-indigo-500/10",
+      text: "text-indigo-400",
+      border: "border-indigo-500/20",
+      glow: "shadow-indigo-500/5",
     },
     amber: {
       bg: "bg-amber-500/10",
@@ -68,7 +68,7 @@ function StatCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4, ease: "easeOut" }}
-      className={`rounded-xl bg-[#11111a] border border-white/[0.06] p-5 shadow-lg ${c.glow} hover:border-white/[0.12] transition-colors duration-300`}
+      className={`rounded-xl bg-[#0c0c16]/70 border border-white/[0.06] p-5 shadow-lg ${c.glow} hover:border-white/[0.12] transition-colors duration-300`}
     >
       <div className="flex items-start justify-between">
         <div>
@@ -76,7 +76,7 @@ function StatCard({
           <p className="text-2xl font-bold mt-2 text-white">{value}</p>
           <div className="flex items-center gap-1.5 mt-1.5">
             {trend && (
-              <span className={`flex items-center text-xs font-medium ${trendUp ? "text-emerald-400" : "text-rose-400"}`}>
+              <span className={`flex items-center text-xs font-medium ${trendUp ? "text-teal-400" : "text-rose-400"}`}>
                 {trendUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                 {trend}
               </span>
@@ -146,7 +146,7 @@ export function OverviewTab() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.18, duration: 0.4 }}
-          className="rounded-xl bg-[#11111a] border border-white/[0.06] p-5"
+          className="rounded-xl bg-[#0c0c16]/70 border border-white/[0.06] p-5"
         >
           <h3 className="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
             <Globe className="w-4 h-4" />
@@ -163,7 +163,7 @@ export function OverviewTab() {
             </div>
             <div>
               <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Log Level</p>
-              <p className="text-sm font-semibold text-cyan-400 font-mono">{status.gateway.log_level}</p>
+              <p className="text-sm font-semibold text-indigo-400 font-mono">{status.gateway.log_level}</p>
             </div>
             <div>
               <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Default Cooldown</p>
@@ -191,10 +191,10 @@ export function OverviewTab() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + i * 0.05, duration: 0.4 }}
-              className={`rounded-xl bg-[#11111a] border p-5 hover:border-white/[0.12] transition-colors duration-300 ${
+              className={`rounded-xl bg-[#0c0c16]/70 border p-5 hover:border-white/[0.12] transition-colors duration-300 ${
                 provider.enabled
                   ? provider.status === "healthy"
-                    ? "border-emerald-500/20"
+                    ? "border-teal-500/20"
                     : "border-amber-500/30"
                   : "border-zinc-700/30 opacity-60"
               }`}
@@ -206,7 +206,7 @@ export function OverviewTab() {
                       !provider.enabled
                         ? "bg-zinc-600"
                         : provider.status === "healthy"
-                        ? "bg-emerald-500"
+                        ? "bg-teal-500"
                         : "bg-amber-500 animate-pulse"
                     }`}
                   />
@@ -222,7 +222,7 @@ export function OverviewTab() {
                       !provider.enabled
                         ? "bg-zinc-500/10 text-zinc-500"
                         : provider.status === "healthy"
-                        ? "bg-emerald-500/10 text-emerald-400"
+                        ? "bg-teal-500/10 text-teal-400"
                         : "bg-amber-500/10 text-amber-400"
                     }`}
                   >
@@ -243,7 +243,7 @@ export function OverviewTab() {
                   {Object.entries(provider.models).map(([virtual, actual]) => (
                     <span
                       key={virtual}
-                      className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/10 font-mono"
+                      className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 font-mono"
                     >
                       {virtual}
                     </span>
@@ -258,7 +258,7 @@ export function OverviewTab() {
                 </div>
                 <div>
                   <p className="text-[10px] text-zinc-600 uppercase">Success</p>
-                  <p className="text-sm font-semibold text-emerald-400">{provider.total_successes.toLocaleString()}</p>
+                  <p className="text-sm font-semibold text-teal-400">{provider.total_successes.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-zinc-600 uppercase">Failures</p>
@@ -279,7 +279,7 @@ export function OverviewTab() {
                       !provider.enabled
                         ? "bg-zinc-600"
                         : provider.status === "healthy"
-                        ? "bg-gradient-to-r from-emerald-500 to-cyan-500"
+                        ? "bg-gradient-to-r from-teal-500 to-indigo-500"
                         : "bg-gradient-to-r from-amber-500 to-orange-500"
                     }`}
                   />
@@ -303,7 +303,7 @@ export function OverviewTab() {
           <h3 className="text-sm font-medium text-zinc-400">Recent Requests</h3>
           <BarChart3 className="w-4 h-4 text-zinc-600" />
         </div>
-        <div className="rounded-xl bg-[#11111a] border border-white/[0.06] overflow-hidden">
+        <div className="rounded-xl bg-[#0c0c16]/70 border border-white/[0.06] overflow-hidden">
           <div className="max-h-64 overflow-y-auto custom-scrollbar">
             <table className="w-full text-sm">
               <thead>
@@ -325,7 +325,7 @@ export function OverviewTab() {
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
                           req.status === "success"
-                            ? "bg-emerald-500/10 text-emerald-400"
+                            ? "bg-teal-500/10 text-teal-400"
                             : req.status === "failover"
                             ? "bg-amber-500/10 text-amber-400"
                             : "bg-rose-500/10 text-rose-400"
