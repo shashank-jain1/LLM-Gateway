@@ -99,7 +99,7 @@ async def forward_non_streaming(
         return 0, str(exc), latency
 
     if 200 <= resp.status_code < 300:
-        health_tracker.record_success(provider.id)
+        health_tracker.record_success(provider.id, virtual_model=virtual_model, latency=latency)
         try:
             return resp.status_code, resp.json(), latency
         except Exception:
@@ -161,7 +161,7 @@ async def forward_streaming(
         return 0, _error_iterator(str(exc)), ttfb
 
     if 200 <= resp.status_code < 300:
-        health_tracker.record_success(provider.id)
+        health_tracker.record_success(provider.id, virtual_model=virtual_model, latency=ttfb)
         return resp.status_code, _sse_iterator(resp), ttfb
     else:
         # Error before first data chunk – safe to failover

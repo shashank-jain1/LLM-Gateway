@@ -32,6 +32,7 @@ export function SettingsTab() {
   const [editMaxCooldown, setEditMaxCooldown] = useState("");
   const [editRequestTimeout, setEditRequestTimeout] = useState("");
   const [editLogLevel, setEditLogLevel] = useState("");
+  const [editRoutingStrategy, setEditRoutingStrategy] = useState("priority");
   const [editApiKeys, setEditApiKeys] = useState<{ key: string; label: string }[]>([]);
   const [hasEdits, setHasEdits] = useState(false);
 
@@ -49,6 +50,7 @@ export function SettingsTab() {
       setEditMaxCooldown(String(gateway.max_cooldown_seconds));
       setEditRequestTimeout(String(gateway.request_timeout_seconds));
       setEditLogLevel(gateway.log_level);
+      setEditRoutingStrategy(gateway.routing_strategy || "priority");
       
       const keysWithLabels = (gateway.api_keys || []).map((k) => ({
         key: k,
@@ -96,6 +98,7 @@ export function SettingsTab() {
         max_cooldown_seconds: parseFloat(editMaxCooldown) || 600.0,
         request_timeout_seconds: parseFloat(editRequestTimeout) || 60.0,
         log_level: editLogLevel || "info",
+        routing_strategy: editRoutingStrategy || "priority",
       },
     });
     setIsSaving(false);
@@ -423,6 +426,19 @@ export function SettingsTab() {
               </select>
             </div>
             <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Routing Strategy</label>
+              <select
+                value={editRoutingStrategy}
+                onChange={(e) => { setEditRoutingStrategy(e.target.value); markEdited(); }}
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-indigo-400 font-mono focus:outline-none focus:border-teal-500/30 focus:ring-1 focus:ring-teal-500/20"
+              >
+                <option value="priority" className="bg-[#0c0c16]">priority (static)</option>
+                <option value="latency" className="bg-[#0c0c16]">latency (fastest first)</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1.5">Providers Configured</label>
               <input
                 type="text"
@@ -431,6 +447,7 @@ export function SettingsTab() {
                 className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/[0.06] text-sm text-white focus:outline-none opacity-60"
               />
             </div>
+            <div></div>
           </div>
 
           {/* Save / Reset buttons */}

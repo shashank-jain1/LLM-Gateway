@@ -59,11 +59,23 @@ def _resolve_candidates(
         else:
             cooling.append((p.priority, p))
 
-    # Sort by priority; stable sort preserves insertion order for equal priorities
-    healthy.sort(key=lambda t: t[0])
-    cooling.sort(key=lambda t: t[0])
+    routing_strategy = config.gateway.routing_strategy if hasattr(config.gateway, "routing_strategy") else "priority"
 
-    ordered = [p for _, p in healthy] + [p for _, p in cooling]
+    if routing_strategy == "latency":
+        # Sort healthy candidates by latency (ascending)
+        # If latency is not recorded, default to 0.0 (exploration)
+        def get_latency(p: ProviderConfig) -> float:
+            state = health_tracker.get_state(p.id)
+            return state.latencies.get(virtual_model, 0.0)
+        healthy_sorted = sorted(healthy, key=lambda t: get_latency(t[1]))
+    else:
+        # Sort by priority
+        healthy_sorted = sorted(healthy, key=lambda t: t[0])
+
+    # For cooling, we always sort by priority (as they are last-resort)
+    cooling_sorted = sorted(cooling, key=lambda t: t[0])
+
+    ordered = [p for _, p in healthy_sorted] + [p for _, p in cooling_sorted]
     return ordered
 
 

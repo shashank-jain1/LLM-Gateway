@@ -18,6 +18,7 @@ export interface ProviderState {
   base_url: string;
   models: Record<string, string>;
   fetched_models?: string[];
+  latencies?: Record<string, number>;
 }
 
 export interface GatewayStatus {
@@ -31,6 +32,7 @@ export interface GatewayStatus {
     max_cooldown_seconds: number;
     request_timeout_seconds: number;
     log_level: string;
+    routing_strategy?: string;
   };
 }
 
@@ -71,6 +73,7 @@ export interface GatewayConfig {
     max_cooldown_seconds: number;
     request_timeout_seconds: number;
     log_level: string;
+    routing_strategy?: string;
   };
   providers: Array<{
     id: string;

@@ -33,6 +33,7 @@ class ProviderState:
     total_requests: int = 0
     total_failures: int = 0
     total_successes: int = 0
+    latencies: Dict[str, float] = field(default_factory=dict)
 
     def is_in_cooldown(self, now: Optional[float] = None) -> bool:
         if self.status != "cooldown" or self.cooldown_until is None:
@@ -92,7 +93,12 @@ class ProviderHealthTracker:
 
     # -- mutations ----------------------------------------------------------
 
-    def record_success(self, provider_id: str) -> None:
+    def record_success(
+        self,
+        provider_id: str,
+        virtual_model: Optional[str] = None,
+        latency: Optional[float] = None,
+    ) -> None:
         state = self.get_state(provider_id)
         state.status = "healthy"
         state.cooldown_until = None
@@ -101,6 +107,11 @@ class ProviderHealthTracker:
         state.last_success_at = time.monotonic()
         state.total_requests += 1
         state.total_successes += 1
+        if virtual_model and latency is not None:
+            if virtual_model in state.latencies:
+                state.latencies[virtual_model] = 0.7 * state.latencies[virtual_model] + 0.3 * latency
+            else:
+                state.latencies[virtual_model] = latency
 
     def record_failure(
         self,

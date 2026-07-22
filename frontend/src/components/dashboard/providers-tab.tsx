@@ -331,16 +331,30 @@ export function ProvidersTab() {
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(provider.models).slice(0, expandedMappingProviders.has(provider.provider_id) ? undefined : 3).map(([virtual, actual]) => (
-                          <span
-                            key={virtual}
-                            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 font-mono"
-                          >
-                            <span className="text-indigo-300">{virtual}</span>
-                            <span className="text-zinc-600">→</span>
-                            <span className="text-zinc-400">{actual}</span>
-                          </span>
-                        ))}
+                        {Object.entries(provider.models).slice(0, expandedMappingProviders.has(provider.provider_id) ? undefined : 3).map(([virtual, actual]) => {
+                          const latency = provider.latencies?.[virtual];
+                          return (
+                            <span
+                              key={virtual}
+                              className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 font-mono"
+                            >
+                              <span className="text-indigo-300">{virtual}</span>
+                              <span className="text-zinc-600">→</span>
+                              <span className="text-zinc-400">{actual}</span>
+                              {latency !== undefined && (
+                                <span className={`text-[9px] ml-1 font-semibold ${
+                                  latency >= 999 
+                                    ? "text-rose-400" 
+                                    : latency > 1.5 
+                                    ? "text-amber-400" 
+                                    : "text-teal-400"
+                                }`}>
+                                  ({latency >= 999 ? "unreachable" : `${(latency * 1000).toFixed(0)}ms`})
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

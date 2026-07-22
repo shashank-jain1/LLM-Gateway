@@ -92,6 +92,71 @@ async def fetch_all_provider_models():
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
+async def probe_provider_model_latency(provider: ProviderConfig, virtual_model: str, health_tracker: ProviderHealthTracker):
+    actual_model = provider.models.get(virtual_model, virtual_model)
+    
+    # Check if embedding model
+    if "embed" in virtual_model.lower() or "similarity" in virtual_model.lower():
+        path = "/embeddings"
+        payload = {
+            "model": actual_model,
+            "input": "ping"
+        }
+    else:
+        path = "/chat/completions"
+        payload = {
+            "model": actual_model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1
+        }
+        
+    url = f"{provider.base_url.rstrip('/')}{path}"
+    headers = {
+        "Content-Type": "application/json"
+    }
+    if provider.api_key:
+        headers["Authorization"] = f"Bearer {provider.api_key}"
+    if provider.extra_headers:
+        headers.update(provider.extra_headers)
+        
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            start = time.monotonic()
+            response = await client.post(url, json=payload, headers=headers)
+            latency = time.monotonic() - start
+            if 200 <= response.status_code < 300:
+                health_tracker.record_success(provider.id, virtual_model=virtual_model, latency=latency)
+            else:
+                state = health_tracker.get_state(provider.id)
+                state.latencies[virtual_model] = 999.0
+    except Exception as exc:
+        state = health_tracker.get_state(provider.id)
+        state.latencies[virtual_model] = 999.0
+
+async def probe_all_latencies(health_tracker: ProviderHealthTracker):
+    cfg = get_config()
+    tasks = []
+    for provider in cfg.providers:
+        if not provider.enabled:
+            continue
+        for virtual_model in provider.models:
+            tasks.append(probe_provider_model_latency(provider, virtual_model, health_tracker))
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+async def start_latency_probing(health_tracker: ProviderHealthTracker):
+    # Wait a few seconds for startup to settle
+    await asyncio.sleep(5.0)
+    logger = get_logger()
+    logger.info("Background latency probing started")
+    while True:
+        try:
+            await probe_all_latencies(health_tracker)
+        except Exception as exc:
+            logger.error(f"Error in background latency probing: {str(exc)}")
+        await asyncio.sleep(30.0)
+
 
 # ---------------------------------------------------------------------------
 # App factory
@@ -498,6 +563,7 @@ def create_app() -> FastAPI:
                 "base_url": p_cfg.base_url if p_cfg else "",
                 "models": p_cfg.models if p_cfg else {},
                 "fetched_models": get_fetched_models_for_provider(state.provider_id),
+                "latencies": state.latencies,
             })
         return JSONResponse(content={
             "providers": result,
@@ -510,6 +576,7 @@ def create_app() -> FastAPI:
                 "max_cooldown_seconds": cfg.gateway.max_cooldown_seconds,
                 "request_timeout_seconds": cfg.gateway.request_timeout_seconds,
                 "log_level": cfg.gateway.log_level,
+                "routing_strategy": cfg.gateway.routing_strategy,
             },
         })
 
@@ -523,6 +590,36 @@ def create_app() -> FastAPI:
             "gateway": cfg.gateway.model_dump(exclude_none=True),
             "providers": [p.model_dump(exclude_none=True) for p in cfg.providers],
         })
+
+    @app.put("/admin/config")
+    async def admin_update_config(request: Request, authorization: Optional[str] = Header(None)):
+        _check_auth(authorization, require_admin=True)
+        body = await request.json()
+        cfg = get_config()
+        
+        # Update gateway settings
+        if "gateway" in body:
+            gateway_data = body["gateway"]
+            for k, v in gateway_data.items():
+                if hasattr(cfg.gateway, k):
+                    setattr(cfg.gateway, k, v)
+                    
+        # Update providers if present in payload
+        if "providers" in body:
+            try:
+                providers = [ProviderConfig(**p) for p in body["providers"]]
+                cfg.providers = providers
+            except Exception as e:
+                return JSONResponse(status_code=400, content={"status": "error", "message": f"Invalid providers config: {str(e)}"})
+                
+        # Save to disk and sync
+        try:
+            from backend.config import save_config
+            save_config()
+            health_tracker.sync_with_config(cfg)
+            return JSONResponse(content={"status": "ok", "message": "Config updated and saved"})
+        except Exception as exc:
+            return JSONResponse(status_code=500, content={"status": "error", "message": str(exc)})
 
     @app.post("/admin/reload-config")
     async def admin_reload_config(authorization: Optional[str] = Header(None)):
@@ -716,6 +813,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         asyncio.create_task(fetch_all_provider_models())
+        asyncio.create_task(start_latency_probing(health_tracker))
 
     @app.on_event("shutdown")
     async def shutdown_event():

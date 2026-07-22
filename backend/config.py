@@ -38,6 +38,10 @@ class GatewaySettings(BaseModel):
     request_timeout_seconds: float = 60.0
     log_level: str = "info"
     log_file: Optional[str] = None
+    routing_strategy: str = Field(
+        default="priority",
+        description="Routing strategy: 'priority' (static priority list) or 'latency' (fastest first)",
+    )
 
     @property
     def effective_admin_keys(self) -> List[str]:
